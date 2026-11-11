@@ -1,29 +1,62 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import zxingUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { QrStreamReceiver, QrStreamSender } from 'qr-stream/react';
 
-type Tab = 'send' | 'receive';
+type Panel = 'send' | 'receive';
 
-export function App() {
-  const [tab, setTab] = useState<Tab>('send');
+/**
+ * Native `<dialog>`: focus trapping, Escape-to-close and a real backdrop come
+ * with the platform, so there is no custom focus management to get wrong.
+ */
+function Modal({ onClose, children }: { onClose(): void; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
 
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 720, margin: '0 auto', padding: 16 }}>
-      <h1 style={{ fontSize: 20 }}>qr-stream</h1>
-      <p style={{ fontSize: 13, opacity: 0.7, marginTop: -8 }}>
-        Airgapped JSON transfer. No network is used after install.
-      </p>
+    <dialog
+      ref={ref}
+      className="app-modal"
+      onClose={onClose}
+      onClick={(event) => {
+        // A click that lands on the dialog itself is a backdrop click.
+        if (event.target === ref.current) onClose();
+      }}
+    >
+      <div className="app-modal__body">{children}</div>
+    </dialog>
+  );
+}
 
-      <div role="tablist" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button role="tab" aria-selected={tab === 'send'} onClick={() => setTab('send')}>
+export function App() {
+  const [panel, setPanel] = useState<Panel | null>(null);
+
+  return (
+    <main className="app">
+      <div className="app__actions">
+        <button type="button" className="app__button app__button--primary" onClick={() => setPanel('send')}>
           Send
         </button>
-        <button role="tab" aria-selected={tab === 'receive'} onClick={() => setTab('receive')}>
+        <button type="button" className="app__button" onClick={() => setPanel('receive')}>
           Receive
         </button>
       </div>
 
-      {tab === 'send' ? <QrStreamSender /> : <QrStreamReceiver wasmUrl={zxingUrl} />}
+      {/* Mounted only while open: unmounting the receiver also stops the camera. */}
+      {panel === 'send' ? (
+        <Modal onClose={() => setPanel(null)}>
+          <QrStreamSender />
+        </Modal>
+      ) : null}
+
+      {panel === 'receive' ? (
+        <Modal onClose={() => setPanel(null)}>
+          <QrStreamReceiver wasmUrl={zxingUrl} />
+        </Modal>
+      ) : null}
     </main>
   );
 }

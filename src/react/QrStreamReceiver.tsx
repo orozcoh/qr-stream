@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ensureQrStreamStyles } from './styles';
 import { useCameraReader } from './useCameraReader';
 import { useQrStreamReader } from './useQrStreamReader';
 
+ensureQrStreamStyles();
+
 export interface QrStreamReceiverProps {
+  /** Optional heading above the camera feed. */
+  title?: string;
   passphrase?: string;
   /** Location of zxing_reader.wasm. Required offline: the default is a CDN. */
   wasmUrl?: string;
@@ -15,6 +20,7 @@ export interface QrStreamReceiverProps {
 }
 
 export function QrStreamReceiver({
+  title,
   passphrase,
   wasmUrl,
   cameraControls = 'auto',
@@ -57,7 +63,7 @@ export function QrStreamReceiver({
     completedRef.current = result.data;
 
     if (download) {
-      const blob = new Blob([result.data as BlobPart], { type: 'application/json' });
+      const blob = new Blob([result.data as BlobPart], { type: 'application/octet-stream' });
       setDownloadUrl(URL.createObjectURL(blob));
     }
     complete(result.data, result.meta.filename);
@@ -73,33 +79,39 @@ export function QrStreamReceiver({
   const percent = progress.k > 0 ? Math.round((progress.solved / progress.k) * 100) : 0;
   const showCameraPicker =
     cameraControls === 'always' || (cameraControls === 'auto' && devices.length > 1);
-  const showOverlaySwitch = cameraControls !== 'hidden' && devices.length > 1;
+  const showSwitch = cameraControls !== 'hidden' && devices.length > 1;
 
   return (
-    <section className={className} style={{ display: 'grid', gap: 16 }}>
-      <div style={{ position: 'relative' }}>
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          style={{ width: '100%', maxWidth: 640, aspectRatio: '4 / 3', background: '#000' }}
+    <div className={className ? `qrs ${className}` : 'qrs'}>
+      {title ? <h2 className="qrs__title">{title}</h2> : null}
+
+      <div className="qrs__feed">
+        <video ref={videoRef} className="qrs__video" playsInline muted />
+        {cameraError ? <span className="qrs__placeholder">Camera unavailable</span> : null}
+      </div>
+
+      {showSwitch ? (
+        <button type="button" className="qrs__button qrs__button--ghost" onClick={() => void cycle()} disabled={switching}>
+          {switching ? 'Switching…' : 'Switch camera'}
+        </button>
+      ) : null}
+
+      <div className="qrs__readout">
+        <progress
+          className="qrs__progress"
+          value={progress.solved}
+          max={Math.max(1, progress.k)}
+          aria-valuetext={`${progress.solved} of ${progress.k} blocks, ${percent} percent`}
         />
-        {showOverlaySwitch ? (
-          <button
-            type="button"
-            onClick={() => void cycle()}
-            disabled={switching}
-            style={{ position: 'absolute', right: 8, bottom: 8 }}
-          >
-            {switching ? 'Switching…' : 'Switch camera'}
-          </button>
-        ) : null}
+        <p className="qrs__meta">
+          {progress.solved} / {progress.k} blocks · {percent}% · {solveRate} frames/s
+        </p>
       </div>
 
       {showCameraPicker ? (
-        <label>
-          Camera
-          <select value={activeId ?? ''} onChange={(event) => void select(event.target.value)}>
+        <label className="qrs__field">
+          <span className="qrs__label">Camera</span>
+          <select className="qrs__select" value={activeId ?? ''} onChange={(event) => void select(event.target.value)}>
             {devices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
                 {device.label}
@@ -110,9 +122,10 @@ export function QrStreamReceiver({
       ) : null}
 
       {zoom ? (
-        <label>
-          Zoom: {zoomValue.toFixed(1)}
+        <label className="qrs__field">
+          <span className="qrs__label">Zoom — {zoomValue.toFixed(1)}×</span>
           <input
+            className="qrs__range"
             type="range"
             min={zoom.min}
             max={zoom.max}
@@ -123,13 +136,57 @@ export function QrStreamReceiver({
         </label>
       ) : null}
 
-      <details style={{ fontSize: 12 }}>
-        <summary style={{ cursor: 'pointer' }}>
-          Cameras reported by this browser ({devices.length})
-        </summary>
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+      {stale ? (
+        <div className="qrs__settings">
+          <p className="qrs__error" role="alert">
+            A different transfer is being sent. This one cannot finish from it.
+          </p>
+          <button type="button" className="qrs__button" onClick={() => reset()}>
+            Switch to the new transfer
+          </button>
+        </div>
+      ) : null}
+
+      {wrongKey ? (
+        <div className="qrs__settings">
+          <input
+            className="qrs__input"
+            type="password"
+            value={typedKey}
+            autoComplete="off"
+            aria-label="Passphrase"
+            onChange={(event) => setTypedKey(event.target.value)}
+            placeholder="passphrase"
+          />
+          <button type="button" className="qrs__button qrs__button--primary" onClick={() => void retryKey(typedKey)}>
+            Unlock
+          </button>
+        </div>
+      ) : null}
+
+      {result ? (
+        <div className="qrs__settings">
+          <p className="qrs__meta" role="status">
+            {result.meta.filename} — SHA-256 verified
+          </p>
+          {downloadUrl ? (
+            <a href={downloadUrl} download={result.meta.filename}>
+              <button type="button" className="qrs__button qrs__button--primary">
+                Save file
+              </button>
+            </a>
+          ) : null}
+          <button type="button" className="qrs__button" onClick={() => reset()}>
+            Receive another
+          </button>
+        </div>
+      ) : null}
+
+      <details className="qrs__details">
+        <summary className="qrs__summary">Cameras reported by this browser ({devices.length})</summary>
+        <table className="qrs__table">
           <thead>
-            <tr style={{ textAlign: 'left', opacity: 0.7 }}>
+            <tr>
               <th>#</th>
               <th>Label</th>
               <th>Facing</th>
@@ -149,7 +206,7 @@ export function QrStreamReceiver({
         </table>
 
         {diagnostics?.active ? (
-          <p style={{ opacity: 0.75 }}>
+          <p>
             Active: {diagnostics.active.label || 'unnamed'} ·{' '}
             {diagnostics.active.settings.width}×{diagnostics.active.settings.height} @{' '}
             {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
@@ -157,70 +214,25 @@ export function QrStreamReceiver({
           </p>
         ) : null}
 
-        <button type="button" onClick={() => void rescan()} disabled={switching}>
+        <p style={{ marginBottom: 8 }}>
+          Some Android builds only list secondary rear cameras after the stream has been opened
+          once. If your phone has more than the browser lists, that is a browser limit.
+        </p>
+        <button type="button" className="qrs__button qrs__button--ghost" onClick={() => void rescan()} disabled={switching}>
           {switching ? 'Scanning…' : 'Rescan cameras'}
         </button>
-        <p style={{ opacity: 0.6, marginBottom: 0 }}>
-          Some Android builds only list secondary rear cameras after the stream has been opened
-          once. If your phone has more than the browser lists, that is a browser limit, not this
-          app.
-        </p>
       </details>
 
-      <div>
-        <progress value={progress.solved} max={Math.max(1, progress.k)} style={{ width: '100%' }} />
-        <p style={{ margin: '4px 0', fontSize: 13 }}>
-          {progress.solved}/{progress.k} blocks · {percent}% · catching {solveRate} frames/s
+      {cameraError ? (
+        <p className="qrs__error" role="alert">
+          {cameraError}
         </p>
-        <p style={{ margin: 0, fontSize: 12, opacity: 0.7 }}>
-          If that number is well below the sender&apos;s fps, ask them to slow down.
+      ) : null}
+      {error ? (
+        <p className="qrs__error" role="alert">
+          {error}
         </p>
-      </div>
-
-      {stale ? (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <p role="alert">
-            A different transfer is being sent. This one cannot finish from it.
-          </p>
-          <button type="button" onClick={() => reset()}>
-            Switch to the new transfer
-          </button>
-        </div>
       ) : null}
-
-      {wrongKey ? (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <input
-            type="password"
-            value={typedKey}
-            autoComplete="off"
-            onChange={(event) => setTypedKey(event.target.value)}
-            placeholder="passphrase"
-          />
-          <button type="button" onClick={() => void retryKey(typedKey)}>
-            Unlock
-          </button>
-        </div>
-      ) : null}
-
-      {result ? (
-        <div style={{ display: 'grid', gap: 8 }}>
-          <p role="status" style={{ margin: 0 }}>
-            Received {result.meta.filename} — SHA-256 verified.
-          </p>
-          {downloadUrl ? (
-            <a href={downloadUrl} download={result.meta.filename}>
-              <button type="button">Save file</button>
-            </a>
-          ) : null}
-          <button type="button" onClick={() => reset()}>
-            Receive another
-          </button>
-        </div>
-      ) : null}
-
-      {cameraError ? <p role="alert">{cameraError}</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-    </section>
+    </div>
   );
 }

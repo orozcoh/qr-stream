@@ -112,7 +112,11 @@ export function renderQrStream(options: RenderOptions): RenderController {
     sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
 
     const ratio = window.devicePixelRatio || 1;
-    const cssWidth = canvas.clientWidth || image.width;
+    // Measure the container, never the canvas: the canvas is sized to an exact
+    // integer multiple of the module grid, so its own CSS width is what we are
+    // about to change. Measuring it would feed the previous size back in.
+    const container = canvas.parentElement;
+    const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
     const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
     const scale = Math.max(1, Math.floor(targetWidth / image.width));
     const size = image.width * scale;

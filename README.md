@@ -92,13 +92,31 @@ import { renderQrStream, readQrStream, quantizeFps } from 'qr-stream/browser';
 ```tsx
 import { QrStreamSender, QrStreamReceiver } from 'qr-stream/react';
 
-<QrStreamSender />
+<QrStreamSender
+  title="Share a file"        // heading, default "qr-stream"
+  accept=".json"              // optional; omitted accepts any file
+  maxBytes={512 * 1024}       // optional tighter cap
+/>
 
 <QrStreamReceiver
   wasmUrl="/assets/zxing_reader.wasm"   // required offline; the default is a CDN
   onComplete={(data, filename) => save(data, filename)}
 />
 ```
+
+Both components are self-contained: they paint their own background, centre
+themselves, and carry no page-level assumptions, so dropping one into a modal
+is the intended use. Styles are injected once, every rule sits inside
+`:where()` (zero specificity), and colours are `--qrs-*` custom properties — so
+a host restyles them with an ordinary selector instead of fighting back:
+
+```css
+.qrs { --qrs-accent: #6366f1; --qrs-bg: #0b1120; }
+```
+
+`accept` is enforced, not just declared: the attribute only filters the native
+picker, so drag-and-drop and "All files" are checked in code and refused with a
+specific message.
 
 The receiver shows its camera picker only when the device reports more than one
 camera, and always offers a one-tap "switch camera" over the preview. On Android

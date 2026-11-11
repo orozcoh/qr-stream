@@ -30,6 +30,16 @@ export interface UseCameraReaderResult {
   setZoom(value: number): Promise<void>;
 }
 
+/** Raw DOMException text is terse and leaks internals; say what to do instead. */
+function explainCameraFailure(cause: unknown): string {
+  if (cause instanceof DOMException) {
+    if (cause.name === 'NotAllowedError') return 'Camera permission denied. Allow access, then reopen.';
+    if (cause.name === 'NotFoundError') return 'No camera found on this device.';
+    if (cause.name === 'NotReadableError') return 'The camera is in use by another app.';
+  }
+  return 'The camera could not be opened.';
+}
+
 export function useCameraReader(options: UseCameraReaderOptions = {}): UseCameraReaderResult {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controllerRef = useRef<CameraController | null>(null);
@@ -78,7 +88,7 @@ export function useCameraReader(options: UseCameraReaderOptions = {}): UseCamera
         setReady(true);
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Camera failed to start.');
+          setError(explainCameraFailure(cause));
         }
       }
     };
