@@ -1,0 +1,55 @@
+{
+  "name": "qr-stream",
+  "version": "0.0.0",
+  "description": "Reliable one-way file transfer between devices using animated fountain-coded QR codes",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./react": "./dist/react.js",
+    "./browser": "./dist/browser.js",
+    "./qr": "./dist/qr.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "typecheck:core": "tsc -p tsconfig.core.json --noEmit",
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/emscripten": "^1.41.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vite-plugin-dts": "^5.1.2",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0",
+    "zxing-wasm": "3.1.6"
+  }
+}
