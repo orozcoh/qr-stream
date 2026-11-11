@@ -174,6 +174,15 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     void enumerate();
   };
 
+  const select = async (id: string): Promise<void> => {
+    try {
+      await open({ video: { deviceId: { exact: id } } });
+    } catch {
+      report('That camera could not be opened. Falling back to the default camera.');
+      await open({ video: { facingMode: { ideal: 'environment' } } });
+    }
+  };
+
   try {
     await openPreferred();
   } catch (error) {
@@ -196,14 +205,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     devices: () => tracks,
     activeId: () => active,
 
-    async select(id: string): Promise<void> {
-      try {
-        await open({ video: { deviceId: { exact: id } } });
-      } catch {
-        report('That camera could not be opened. Falling back to the default camera.');
-        await open({ video: { facingMode: { ideal: 'environment' } } });
-      }
-    },
+    select,
 
     async cycle(): Promise<void> {
       const rear = tracks.filter((device) => device.facing !== 'user');
@@ -211,7 +213,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
       if (pool.length < 2) return;
       const index = pool.findIndex((device) => device.deviceId === active);
       const next = pool[(index + 1) % pool.length] as CameraDevice;
-      await this.select(next.deviceId);
+      await select(next.deviceId);
     },
 
     stop(): void {
