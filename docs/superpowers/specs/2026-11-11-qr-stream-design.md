@@ -123,10 +123,12 @@ Metadata is carried inside block 0: `varint metaVersion`, `u8 filenameLen + utf8
 
 Systematic LT with an integer PRNG, so sender and receiver agree bit-for-bit with nothing transmitted about the XOR set.
 
-- Degree: `P(d=1) = 0.5`, otherwise `2 + rand % (min(K,20) - 1)`; indices chosen by rejection sampling.
+- Degree: uniform over `1..K`, indices chosen by rejection sampling.
 - PRNG: `splitmix32(sessionId ^ symbolIdx)`.
 - Decoder: peeling (solve any equation with one unsolved bit, substitute, repeat); GF(2) Gaussian elimination over `bigint` masks when peeling stalls.
-- Reliability target: reconstruct from `1.5 * K` symbols under 30% random erasure and 30% contiguous erasure, at most 1 failure in 1000 trials.
+- Reliability target: reconstruct from `1.75 * K` symbols under 30% random erasure and 30% contiguous erasure, at most 1 failure in 1000 trials.
+
+The degree distribution was settled by measurement, not theory. A sparse distribution (50% degree-1, flat tail to 20) failed 14% of 30-block transfers at 1.5×K: half the repair symbols were duplicates of one block and added no rank. A robust-soliton split (mass on degree 2–3 plus a spike at √K) made it worse (30%), because the surviving rank deficiency is in the projected matrix, not in peeling. Dense uniform subsets plus Gaussian elimination measured 0/1000 at 1.75×K for both erasure models, and 1.15×K already works at K=306, where larger matrices are better conditioned. Peeling is largely bypassed at small K, which is acceptable: `K` never exceeds a few hundred, so elimination is cheap.
 
 ## Encryption
 

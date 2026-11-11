@@ -50,15 +50,21 @@ describe('symbolIndices', () => {
     expect(symbolIndices(1, 500, 200)).not.toEqual(symbolIndices(2, 500, 200));
   });
 
-  test('degree 1 occurs about half the time', () => {
+  test('degree is uniform over 1..k', () => {
+    const k = 100;
     const trials = 10000;
-    let singles = 0;
-    for (let symbolIdx = 100; symbolIdx < 100 + trials; symbolIdx += 1) {
-      if (symbolIndices(0xabcd, symbolIdx, 100).length === 1) singles += 1;
+    let sum = 0;
+    const seen = new Set<number>();
+    for (let symbolIdx = k; symbolIdx < k + trials; symbolIdx += 1) {
+      const degree = symbolIndices(0xabcd, symbolIdx, k).length;
+      sum += degree;
+      seen.add(degree);
     }
-    const fraction = singles / trials;
-    expect(fraction).toBeGreaterThanOrEqual(0.48);
-    expect(fraction).toBeLessThanOrEqual(0.52);
+    const mean = sum / trials;
+    // Uniform 1..k has mean (k + 1) / 2.
+    expect(mean).toBeGreaterThan(46);
+    expect(mean).toBeLessThan(55);
+    expect(seen.size).toBeGreaterThan(90);
   });
 
   test('never exceeds k distinct indices', () => {
