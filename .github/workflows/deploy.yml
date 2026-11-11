@@ -11,6 +11,9 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  SITE_URL: https://qr-stream.digitalerror.xyz
+
 jobs:
   verify-and-deploy:
     runs-on: ubuntu-latest
@@ -51,3 +54,38 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: '4'
           command: deploy
+
+      # Wrangler swallows custom-domain errors when it is not attached to a TTY,
+      # so a missing permission or a DNS conflict can produce a green deploy of
+      # an unreachable site. Assert the domain actually serves before calling
+      # this a success.
+      - name: Verify the deployment is live
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          live=0
+          for attempt in $(seq 1 10); do
+            if curl -sfI "$SITE_URL/" > /dev/null; then
+              live=1
+              echo "$SITE_URL responded on attempt $attempt"
+              break
+            fi
+            echo "attempt $attempt: no response, retrying in 6s"
+            sleep 6
+          done
+
+          if [ "$live" -ne 1 ]; then
+            echo "::error::$SITE_URL never responded. The Worker deployed but the custom domain is not attached — check Settings > Domains & Routes."
+            exit 1
+          fi
+
+          for asset in sw.js manifest.webmanifest icon.svg; do
+            curl -sfI "$SITE_URL/$asset" > /dev/null \
+              || { echo "::error::$asset is not being served"; exit 1; }
+            echo "$asset ok"
+          done
+
+          # Without this header the page loads and the camera silently fails,
+          # which is the failure this whole app exists to avoid.
+          curl -sI "$SITE_URL/" | grep -qi '^permissions-policy:.*camera=(self)' \
+            || { echo "::error::permissions-policy camera=(self) is missing — demo/public/_headers did not reach the assets directory"; exit 1; }
+          echo "permissions-policy ok"
