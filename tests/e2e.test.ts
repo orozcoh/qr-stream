@@ -25,22 +25,27 @@ const makeJson = (records: number): Uint8Array =>
   );
 
 async function roundTrip(payload: Uint8Array, preset: 'fast' | 'balanced', passphrase?: string) {
-  const writer = await createQrStreamWriter(payload, { filename: 'e2e.json', preset, ...(passphrase ? { passphrase } : {}) });
-  const packets: Uint8Array[] = [];
-  for await (const packet of writer.packets()) {
-    packets.push(packet);
-    if (packets.length >= Math.ceil(writer.k * 2)) break;
-  }
-
-  const rand = lcg(4242);
-  const survived = packets.filter(() => rand() >= 0.25);
-  for (let i = survived.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rand() * (i + 1));
-    [survived[i], survived[j]] = [survived[j] as Uint8Array, survived[i] as Uint8Array];
-  }
+  const writer = await createQrStreamWriter(payload, {
+    filename: 'e2e.json',
+    preset,
+    ...(passphrase ? { passphrase } : {}),
+  });
 
   const reader = createQrStreamReader();
-  for (const packet of survived) reader.add(packet);
+  const rand = lcg(4242);
+  const cap = writer.k * 20 + 50;
+  let emitted = 0;
+
+  // The real sender loops forever, so emit until the reader is satisfied rather
+  // than through a fixed window: a fixed 1.5xK window is marginal when gzip has
+  // collapsed the payload into only a few blocks.
+  for await (const packet of writer.packets()) {
+    emitted += 1;
+    if (rand() >= 0.25) reader.add(packet);
+    if (reader.progress().solved === writer.k) break;
+    if (emitted >= cap) break;
+  }
+
   return reader.result(passphrase);
 }
 
