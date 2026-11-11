@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+.superpowers/
+.DS_Store
+*.local
+*.log
+
+# local agent skill installs (tooling, not project source)
+.agents/
+.claude/
+agent/
+skills-lock.json
