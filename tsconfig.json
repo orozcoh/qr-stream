@@ -25,19 +25,19 @@
       "vite/client"
     ],
     "paths": {
-      "qr-stream": [
+      "@orozcoh/qr-stream": [
         "./src/index.ts"
       ],
-      "qr-stream/react": [
+      "@orozcoh/qr-stream/react": [
         "./src/react/index.ts"
       ],
-      "qr-stream/browser": [
+      "@orozcoh/qr-stream/browser": [
         "./src/browser.ts"
       ],
-      "qr-stream/qr": [
+      "@orozcoh/qr-stream/qr": [
         "./src/qr.ts"
       ],
-      "qr-stream/browser/zxing": [
+      "@orozcoh/qr-stream/browser/zxing": [
         "./src/browser/decoders/zxing.ts"
       ]
     }

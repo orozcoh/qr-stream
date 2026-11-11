@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import zxingUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
-import { createZXingDecoder } from 'qr-stream/browser/zxing';
-import { QrStreamReceiver, QrStreamSender } from 'qr-stream/react';
+import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
+import { QrStreamReceiver, QrStreamSender } from '@orozcoh/qr-stream/react';
 
 // Stable identity: a new factory every render would restart the camera.
 const zxingDecoder = () => createZXingDecoder({ wasmUrl: zxingUrl });

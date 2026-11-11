@@ -1,7 +1,7 @@
 /**
  * The one thing the camera reader needs from a QR library.
  *
- * Kept as an interface so this package depends on no decoder: `qr-stream/browser`
+ * Kept as an interface so this package depends on no decoder: `@orozcoh/qr-stream/browser`
  * imports nothing, and whichever decoder you wire in is the only one that ends
  * up in your bundle. The core codec and the sender need no decoder at all.
  */

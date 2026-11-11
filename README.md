@@ -48,10 +48,20 @@ To use it across two real devices, deploy `demo/dist/` to any static host over
 needs a secure context, and the service worker has to cache the app before the
 two devices are allowed to be offline.
 
+## Install
+
+```bash
+npm install @orozcoh/qr-stream
+```
+
+The codec entry has no dependencies. The React entry needs React 19, and the
+decoder needs `zxing-wasm` (see [Decoders](#decoders)). Neither is installed for
+you, so a project that only encodes ships neither.
+
 ## Library API
 
 ```ts
-import { createQrStreamWriter, createQrStreamReader } from 'qr-stream';
+import { createQrStreamWriter, createQrStreamReader } from '@orozcoh/qr-stream';
 
 const writer = await createQrStreamWriter(bytes, {
   filename: 'report.json',
@@ -68,7 +78,7 @@ for await (const packet of writer.packets()) {
 ```
 
 ```ts
-import { createQrStreamReader } from 'qr-stream';
+import { createQrStreamReader } from '@orozcoh/qr-stream';
 
 const reader = createQrStreamReader();
 reader.add(packetBytes);      // 'accepted' | 'duplicate' | 'stale-session' | 'invalid'
@@ -83,15 +93,15 @@ const result = await reader.result('optional passphrase');
 Rendering and capture live behind their own entry points:
 
 ```ts
-import { packetToMatrix, matrixToRGBA, qrCapacity } from 'qr-stream/qr';
-import { renderQrStream, readQrStream, quantizeFps } from 'qr-stream/browser';
-import { createZXingDecoder } from 'qr-stream/browser/zxing';
+import { packetToMatrix, matrixToRGBA, qrCapacity } from '@orozcoh/qr-stream/qr';
+import { renderQrStream, readQrStream, quantizeFps } from '@orozcoh/qr-stream/browser';
+import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
 ```
 
 ## React API
 
 ```tsx
-import { QrStreamSender, QrStreamReceiver } from 'qr-stream/react';
+import { QrStreamSender, QrStreamReceiver } from '@orozcoh/qr-stream/react';
 
 <QrStreamSender
   title="Share a file"        // heading, default "qr-stream"
@@ -137,15 +147,15 @@ useCameraReader({ deviceId, onSymbol, createDecoder })   // { videoRef, devices,
 The package ships **no** decoder. `readQrStream` takes one:
 
 ```ts
-import { createZXingDecoder } from 'qr-stream/browser/zxing';
+import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
 
 const decode = await createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' });
 await readQrStream({ video, decode });
 ```
 
 `zxing-wasm` is an **optional peer dependency**, so a project that only encodes
-(or only uses the sender) never installs it. `qr-stream/browser` itself imports
-no QR library; only `qr-stream/browser/zxing` does. If you forget to install the
+(or only uses the sender) never installs it. `@orozcoh/qr-stream/browser` itself imports
+no QR library; only `@orozcoh/qr-stream/browser/zxing` does. If you forget to install the
 peer, the bundler fails at build time naming the package.
 
 `createZXingDecoder` is the only decoder provided. That is a deliberate

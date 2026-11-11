@@ -31,11 +31,11 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      'qr-stream/browser/zxing': here('../src/browser/decoders/zxing.ts'),
-      'qr-stream/react': here('../src/react/index.ts'),
-      'qr-stream/browser': here('../src/browser.ts'),
-      'qr-stream/qr': here('../src/qr.ts'),
-      'qr-stream': here('../src/index.ts'),
+      '@orozcoh/qr-stream/browser/zxing': here('../src/browser/decoders/zxing.ts'),
+      '@orozcoh/qr-stream/react': here('../src/react/index.ts'),
+      '@orozcoh/qr-stream/browser': here('../src/browser.ts'),
+      '@orozcoh/qr-stream/qr': here('../src/qr.ts'),
+      '@orozcoh/qr-stream': here('../src/index.ts'),
     },
   },
   build: {
