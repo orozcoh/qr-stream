@@ -27,6 +27,10 @@
     "./qr": {
       "types": "./dist/qr.d.ts",
       "import": "./dist/qr.js"
+    },
+    "./browser/zxing": {
+      "types": "./dist/browser/decoders/zxing.d.ts",
+      "import": "./dist/zxing.js"
     }
   },
   "scripts": {
@@ -43,18 +47,17 @@
     "deploy:dry": "wrangler deploy --dry-run"
   },
   "dependencies": {
-    "qrcode-generator": "^2.0.4",
-    "zxing-wasm": "3.1.6"
+    "qrcode-generator": "^2.0.4"
   },
   "peerDependencies": {
     "react": ">=19",
-    "react-dom": ">=19"
+    "zxing-wasm": "^3.1.0"
   },
   "peerDependenciesMeta": {
     "react": {
       "optional": true
     },
-    "react-dom": {
+    "zxing-wasm": {
       "optional": true
     }
   },

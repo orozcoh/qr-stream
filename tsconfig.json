@@ -36,6 +36,9 @@
       ],
       "qr-stream/qr": [
         "./src/qr.ts"
+      ],
+      "qr-stream/browser/zxing": [
+        "./src/browser/decoders/zxing.ts"
       ]
     }
   },

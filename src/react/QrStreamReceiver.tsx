@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureQrStreamStyles } from './styles';
 import { useCameraReader } from './useCameraReader';
+import type { FrameDecoder } from '../browser/decoder';
 import { useQrStreamReader } from './useQrStreamReader';
 
 ensureQrStreamStyles();
@@ -9,8 +10,12 @@ export interface QrStreamReceiverProps {
   /** Optional heading above the camera feed. */
   title?: string;
   passphrase?: string;
-  /** Location of zxing_reader.wasm. Required offline: the default is a CDN. */
-  wasmUrl?: string;
+  /**
+   * Builds the QR decoder, e.g. `() => createZXingDecoder({ wasmUrl })`.
+   * Required: this package ships no decoder, so the one you choose is the only
+   * one that ends up in your bundle.
+   */
+  decoder(): Promise<FrameDecoder>;
   /** `auto` shows the picker only when the device reports more than one camera. */
   cameraControls?: 'auto' | 'hidden' | 'always';
   /** Offer a save link. On by default: a received file you cannot save is a dead end. */
@@ -22,7 +27,7 @@ export interface QrStreamReceiverProps {
 export function QrStreamReceiver({
   title,
   passphrase,
-  wasmUrl,
+  decoder,
   cameraControls = 'auto',
   download = true,
   onComplete,
@@ -46,7 +51,7 @@ export function QrStreamReceiver({
     setZoom,
   } = useCameraReader({
     onSymbol: add,
-    ...(wasmUrl ? { wasmUrl } : {}),
+    createDecoder: decoder,
   });
 
   const [typedKey, setTypedKey] = useState('');

@@ -1,4 +1,4 @@
-import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
+import type { FrameDecoder } from './decoder';
 
 export interface CameraDevice {
   deviceId: string;
@@ -45,8 +45,11 @@ export interface CameraController {
 
 export interface ReadOptions {
   video: HTMLVideoElement;
-  /** Location of zxing_reader.wasm. Without it the decoder falls back to a CDN. */
-  wasmUrl?: string;
+  /**
+   * Required. There is deliberately no default: a built-in decoder would put a
+   * ~925 KB dependency in this entry point and in every project that imports it.
+   */
+  decode: FrameDecoder;
   /** Camera to open first. Falls back to environment-facing when absent or gone. */
   deviceId?: string;
 }
@@ -83,10 +86,6 @@ function describe(device: MediaDeviceInfo, index: number): CameraDevice {
  */
 export async function readQrStream(options: ReadOptions): Promise<CameraController> {
   const { video } = options;
-
-  if (options.wasmUrl) {
-    await prepareZXingModule({ overrides: { locateFile: () => options.wasmUrl as string } });
-  }
 
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently: true });
@@ -175,10 +174,8 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
         }
         context.drawImage(video, 0, 0, targetWidth, targetHeight);
         const image = context.getImageData(0, 0, targetWidth, targetHeight);
-        const results = await readBarcodes(image, { formats: ['QRCode'] });
-        for (const result of results) {
-          if (result.isValid && result.bytes.length > 0) symbolHandler?.(result.bytes);
-        }
+        const bytes = await options.decode.decode(image);
+        if (bytes !== null) symbolHandler?.(bytes);
       }
       consecutiveFailures = 0;
     } catch (failure) {
@@ -190,8 +187,8 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
         reportedDecodeFailure = true;
         report(
           failure instanceof Error
-            ? `Decoding is not working (${failure.message}). If this device is offline, the QR decoder may be missing from the cache.`
-            : 'Decoding is not working. If this device is offline, the QR decoder may be missing from the cache.',
+            ? `Decoding is not working (${failure.message}). Check the decoder you passed in.`
+            : 'Decoding is not working. Check the decoder you passed in.',
         );
       }
     } finally {
@@ -239,10 +236,6 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
   navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
 
-  // Warm the decoder so the first real frame is not spent compiling WASM.
-  void readBarcodes(new Uint8Array(0) as unknown as ImageData, { formats: ['QRCode'] }).catch(() => {
-    report('The QR decoder could not be loaded. Offline use requires the WASM file to be cached.');
-  });
 
   schedule();
 

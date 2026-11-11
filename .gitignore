@@ -13,3 +13,6 @@ coverage/
 .claude/
 agent/
 skills-lock.json
+
+# pack artefacts
+*.tgz

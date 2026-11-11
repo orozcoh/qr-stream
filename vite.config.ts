@@ -13,6 +13,7 @@ export default defineConfig({
         browser: here('./src/browser.ts'),
         react: here('./src/react/index.ts'),
         qr: here('./src/qr.ts'),
+        zxing: here('./src/browser/decoders/zxing.ts'),
       },
       formats: ['es'],
     },

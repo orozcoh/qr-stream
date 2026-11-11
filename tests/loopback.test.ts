@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, test, beforeAll } from 'vitest';
-import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
+import { prepareZXingModule } from 'zxing-wasm/reader';
+import { createZXingDecoder } from '../src/browser/decoders/zxing';
 import { createQrStreamWriter } from '../src/core/writer';
 import { decodePacket } from '../src/core/packet';
 import { packetToMatrix } from '../src/qr/matrix';
@@ -16,8 +17,11 @@ beforeAll(async () => {
 });
 
 async function decode(image: { data: Uint8ClampedArray; width: number; height: number }) {
-  const results = await readBarcodes(image as unknown as ImageData, { formats: ['QRCode'] });
-  return results.filter((r) => r.isValid).map((r) => r.bytes);
+  // Module overrides are cached globally, so the wasmBinary prepared above is
+  // what this decoder instantiates — no URL to fetch under Node.
+  const decoder = await createZXingDecoder();
+  const bytes = await decoder.decode(image as unknown as ImageData);
+  return bytes === null ? [] : [bytes];
 }
 
 describe('render / decode loopback', () => {

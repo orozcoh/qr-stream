@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import zxingUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
+import { createZXingDecoder } from 'qr-stream/browser/zxing';
 import { QrStreamReceiver, QrStreamSender } from 'qr-stream/react';
+
+// Stable identity: a new factory every render would restart the camera.
+const zxingDecoder = () => createZXingDecoder({ wasmUrl: zxingUrl });
 
 type Panel = 'send' | 'receive';
 
@@ -54,7 +58,7 @@ export function App() {
 
       {panel === 'receive' ? (
         <Modal onClose={() => setPanel(null)}>
-          <QrStreamReceiver wasmUrl={zxingUrl} />
+          <QrStreamReceiver decoder={zxingDecoder} />
         </Modal>
       ) : null}
     </main>

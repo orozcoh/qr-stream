@@ -36,6 +36,9 @@ Why QR: it is the only channel that crosses an airgap from a phone without a rad
 ## Constraints
 
 - iOS Safari has no `BarcodeDetector`; a WASM QR decoder is required.
+- `BarcodeDetector` cannot carry this stream even where it exists: it exposes
+  `rawValue` as a string, and a measured binary packet decodes to an empty
+  string while an ASCII payload round-trips byte-perfect.
 - `getUserMedia` requires a secure context (HTTPS or localhost).
 - Phone screens are ~390 pt wide; a version-40 QR is 177 modules across.
 - Display refresh is 60 Hz; a code updated mid-refresh is unreadable.
@@ -176,6 +179,13 @@ Static files only. Two failure modes to guard:
 
 - `getUserMedia` needs a secure context, so the receiving device must load the app once from an HTTPS origin before it can be installed and used offline.
 - The WASM decoder must be precached. `vite-plugin-pwa` will not include a `.wasm` from `node_modules` unless `'**/*.wasm'` is added to `workbox.globPatterns`. Missing this makes the receiver work online and fail in the airgap.
+
+## Decoding
+
+The decoder is injected, not built in. `readQrStream` requires a
+`FrameDecoder`, `qr-stream/browser` imports no QR library, and `zxing-wasm` is
+an optional peer reached only through `qr-stream/browser/zxing`. That keeps the
+choice of shipped bytes with the consuming project instead of with this one.
 
 ## Testing
 

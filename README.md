@@ -85,6 +85,7 @@ Rendering and capture live behind their own entry points:
 ```ts
 import { packetToMatrix, matrixToRGBA, qrCapacity } from 'qr-stream/qr';
 import { renderQrStream, readQrStream, quantizeFps } from 'qr-stream/browser';
+import { createZXingDecoder } from 'qr-stream/browser/zxing';
 ```
 
 ## React API
@@ -99,7 +100,7 @@ import { QrStreamSender, QrStreamReceiver } from 'qr-stream/react';
 />
 
 <QrStreamReceiver
-  wasmUrl="/assets/zxing_reader.wasm"   // required offline; the default is a CDN
+  decoder={() => createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' })}
   onComplete={(data, filename) => save(data, filename)}
 />
 ```
@@ -128,8 +129,33 @@ Hooks, when you want your own layout:
 ```ts
 useQrStreamWriter({ data, filename, preset, passphrase }) // { writer, error }
 useQrStreamReader({ passphrase })                        // { progress, solveRate, result, wrongKey, add, retryKey, reset }
-useCameraReader({ deviceId, onSymbol, wasmUrl })         // { videoRef, devices, activeId, select, cycle, switching, error }
+useCameraReader({ deviceId, onSymbol, createDecoder })   // { videoRef, devices, activeId, select, cycle, switching, error }
 ```
+
+## Decoders
+
+The package ships **no** decoder. `readQrStream` takes one:
+
+```ts
+import { createZXingDecoder } from 'qr-stream/browser/zxing';
+
+const decode = await createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' });
+await readQrStream({ video, decode });
+```
+
+`zxing-wasm` is an **optional peer dependency**, so a project that only encodes
+(or only uses the sender) never installs it. `qr-stream/browser` itself imports
+no QR library; only `qr-stream/browser/zxing` does. If you forget to install the
+peer, the bundler fails at build time naming the package.
+
+`createZXingDecoder` is the only decoder provided, and that is deliberate.
+`BarcodeDetector` — the built-in alternative, and free of bytes — exposes its
+result as `rawValue`, a **string**. Measured against a real packet in Chrome:
+the detector finds the code and returns an empty string, because a packet is
+binary by construction (magic, u32 fields, CRC). An ASCII payload round-trips
+byte-perfect through the same pipeline, so the detector works; it just cannot
+carry our format. A text-safe encoding would fix it at roughly 33% of the QR
+capacity, which is not a trade worth making silently.
 
 ## Offline requirements
 
@@ -169,7 +195,7 @@ pnpm demo:build
 ```
 
 The highest-value test is `tests/loopback.test.ts`: it rasterises real packets
-and decodes them with the same `zxing-wasm` build the receiver uses. No camera
+and decodes them with the same decoder the receiver uses. No camera
 involved. Density bugs are silent until a camera is pointed at them, so this
 runs in the suite.
 

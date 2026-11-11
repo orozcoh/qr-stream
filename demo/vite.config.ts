@@ -31,6 +31,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      'qr-stream/browser/zxing': here('../src/browser/decoders/zxing.ts'),
       'qr-stream/react': here('../src/react/index.ts'),
       'qr-stream/browser': here('../src/browser.ts'),
       'qr-stream/qr': here('../src/qr.ts'),

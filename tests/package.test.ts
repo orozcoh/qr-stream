@@ -7,17 +7,33 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
 describe('package metadata', () => {
-  test('runtime dependencies are declared as dependencies, not devDependencies', () => {
-    // The built output imports these at runtime. Shipping them as dev
-    // dependencies makes the published package fail to import.
-    const runtime = ['qrcode-generator', 'zxing-wasm'];
-    for (const name of runtime) {
-      expect(pkg.dependencies?.[name], `${name} must be a runtime dependency`).toBeTruthy();
-      expect(pkg.devDependencies?.[name], `${name} must not be dev-only`).toBeUndefined();
+  test('the QR encoder is a runtime dependency', () => {
+    // The sender imports it at runtime; shipping it as a dev dependency makes
+    // the published package fail to import.
+    expect(pkg.dependencies?.['qrcode-generator']).toBeTruthy();
+    expect(pkg.devDependencies?.['qrcode-generator']).toBeUndefined();
+  });
+
+  test('the decoder is an optional peer so consumers choose its cost', () => {
+    expect(pkg.dependencies?.['zxing-wasm']).toBeUndefined();
+    expect(pkg.peerDependencies?.['zxing-wasm']).toBeTruthy();
+    expect(pkg.peerDependenciesMeta?.['zxing-wasm']?.optional).toBe(true);
+  });
+
+  test('nothing under src/browser imports a decoder except the decoder folder', () => {
+    const browserDir = join(root, 'src', 'browser');
+    const offenders: string[] = [];
+    for (const entry of readdirSync(browserDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
+      const text = readFileSync(join(browserDir, entry.name), 'utf8');
+      if (text.includes('zxing-wasm')) offenders.push(entry.name);
     }
+    expect(offenders).toEqual([]);
   });
 
   test('the core never depends on the QR encoder', () => {

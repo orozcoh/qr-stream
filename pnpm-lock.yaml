@@ -12,7 +12,7 @@ importers:
         specifier: ^2.0.4
         version: 2.0.4
       zxing-wasm:
-        specifier: 3.1.6
+        specifier: ^3.1.0
         version: 3.1.6(@types/emscripten@1.41.6)
     devDependencies:
       '@types/emscripten':

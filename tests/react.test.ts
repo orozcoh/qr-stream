@@ -8,6 +8,9 @@ import { describeAccept, matchesAccept } from '../src/react/file-accept';
 const fakeFile = (name: string, type: string): File =>
   ({ name, type, size: 10 }) as unknown as File;
 
+/** SSR never runs effects, so this factory is only here to satisfy the type. */
+const stubDecoder = async () => ({ decode: async () => null });
+
 describe('QrStreamSender', () => {
   test('renders the default title', () => {
     const html = renderToStaticMarkup(createElement(QrStreamSender, {}));
@@ -58,37 +61,37 @@ describe('QrStreamSender', () => {
 
 describe('QrStreamReceiver', () => {
   test('renders a muted inline video', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, {}));
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder }));
     expect(html).toContain('<video');
     expect(html.toLowerCase()).toContain('playsinline');
     expect(html).toContain('muted');
   });
 
   test('renders without a heading unless one is given', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, {}));
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder }));
     expect(html).not.toContain('qrs__title');
   });
 
   test('renders a heading when asked', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { title: 'Receive a file' }));
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder, title: 'Receive a file' }));
     expect(html).toContain('Receive a file');
   });
 
   test('reports progress with an accessible value', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, {}));
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder }));
     expect(html).toContain('<progress');
     expect(html).toContain('0 / 0 blocks');
     expect(html).toContain('aria-valuetext');
   });
 
   test('hides camera controls until the browser reports a choice', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, {}));
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder }));
     expect(html).not.toContain('Switch camera');
     expect(html).not.toContain('>Camera<');
   });
 
   test('camera controls can be suppressed entirely', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { cameraControls: 'hidden' }));
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder, cameraControls: 'hidden' }));
     expect(html).not.toContain('Switch camera');
   });
 });

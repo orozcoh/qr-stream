@@ -5,11 +5,13 @@ import {
   type CameraDevice,
   type CameraDiagnostics,
 } from '../browser/camera';
+import type { FrameDecoder } from '../browser/decoder';
 
 export interface UseCameraReaderOptions {
   deviceId?: string;
   onSymbol?(bytes: Uint8Array): void;
-  wasmUrl?: string;
+  /** Builds the QR decoder. Required — the package ships none. */
+  createDecoder(): Promise<FrameDecoder>;
 }
 
 export interface UseCameraReaderResult {
@@ -40,7 +42,7 @@ function explainCameraFailure(cause: unknown): string {
   return 'The camera could not be opened.';
 }
 
-export function useCameraReader(options: UseCameraReaderOptions = {}): UseCameraReaderResult {
+export function useCameraReader(options: UseCameraReaderOptions): UseCameraReaderResult {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controllerRef = useRef<CameraController | null>(null);
   const symbolRef = useRef(options.onSymbol);
@@ -72,9 +74,10 @@ export function useCameraReader(options: UseCameraReaderOptions = {}): UseCamera
     const start = async (): Promise<void> => {
       if (!videoRef.current) return;
       try {
+        const decode = await options.createDecoder();
         const controller = await readQrStream({
           video: videoRef.current,
-          ...(options.wasmUrl ? { wasmUrl: options.wasmUrl } : {}),
+          decode,
           ...(options.deviceId ? { deviceId: options.deviceId } : {}),
         });
         if (cancelled) {
