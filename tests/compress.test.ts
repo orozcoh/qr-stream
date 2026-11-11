@@ -26,7 +26,6 @@ describe('gzipIfSmaller', () => {
     const result = await gzipIfSmaller(new Uint8Array(0));
     expect(result.gzipped).toBe(false);
     expect(result.data.length).toBe(0);
-    expect(Array.from(await gunzip(result.data))).toEqual([]);
   });
 
   test('gunzip rejects data that is not gzip', async () => {
