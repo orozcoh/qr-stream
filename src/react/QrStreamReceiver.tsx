@@ -4,6 +4,8 @@ import { useQrStreamReader } from './useQrStreamReader';
 
 export interface QrStreamReceiverProps {
   passphrase?: string;
+  /** Location of zxing_reader.wasm. Required offline: the default is a CDN. */
+  wasmUrl?: string;
   /** `auto` shows the picker only when the device reports more than one camera. */
   cameraControls?: 'auto' | 'hidden' | 'always';
   onComplete?(data: Uint8Array, filename: string): void;
@@ -12,6 +14,7 @@ export interface QrStreamReceiverProps {
 
 export function QrStreamReceiver({
   passphrase,
+  wasmUrl,
   cameraControls = 'auto',
   onComplete,
   className,
@@ -21,6 +24,7 @@ export function QrStreamReceiver({
   });
   const { videoRef, devices, activeId, select, cycle, switching, error: cameraError } = useCameraReader({
     onSymbol: add,
+    ...(wasmUrl ? { wasmUrl } : {}),
   });
 
   const [typedKey, setTypedKey] = useState('');

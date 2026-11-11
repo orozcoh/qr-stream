@@ -12,18 +12,33 @@
     "dist"
   ],
   "exports": {
-    ".": "./dist/index.js",
-    "./react": "./dist/react.js",
-    "./browser": "./dist/browser.js",
-    "./qr": "./dist/qr.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./qr": {
+      "types": "./dist/qr.d.ts",
+      "import": "./dist/qr.js"
+    }
   },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "typecheck:core": "tsc -p tsconfig.core.json --noEmit",
-    "build": "vite build",
-    "dev": "vite"
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "dev": "vite",
+    "demo:build": "vite build --config demo/vite.config.ts",
+    "demo:preview": "vite preview --config demo/vite.config.ts",
+    "demo:dev": "vite --config demo/vite.config.ts"
   },
   "peerDependencies": {
     "react": ">=19",
@@ -48,7 +63,6 @@
     "react-dom": "^19.3.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.7",
-    "vite-plugin-dts": "^5.1.2",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.0",
     "zxing-wasm": "3.1.6"
