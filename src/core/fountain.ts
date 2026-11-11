@@ -62,7 +62,7 @@ function xorInto(target: Uint8Array, source: Uint8Array): void {
  * limit without a dependency.
  */
 export class FountainDecoder {
-  private readonly sourceCount: number;
+  readonly sourceCount: number;
   private readonly blockSize: number;
   private readonly sessionId: number;
   private readonly blocks: (Uint8Array | null)[];
