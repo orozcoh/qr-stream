@@ -1,16 +1,22 @@
 {
   "name": "qr-stream",
-  "version": "0.0.0",
-  "description": "Reliable one-way file transfer between devices using animated fountain-coded QR codes",
-  "type": "module",
-  "license": "MIT",
-  "private": true,
-  "engines": {
-    "node": ">=22"
-  },
-  "files": [
-    "dist"
+  "version": "0.1.0",
+  "description": "Reliable one-way file transfer between devices using animated fountain-coded QR codes, with an offline PWA and a React reader/writer.",
+  "keywords": [
+    "qr",
+    "qr-code",
+    "fountain-code",
+    "airgap",
+    "offline",
+    "file-transfer",
+    "pwa",
+    "react"
   ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -33,6 +39,9 @@
       "import": "./dist/zxing.js"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -44,7 +53,8 @@
     "demo:preview": "vite preview --config demo/vite.config.ts",
     "demo:dev": "vite --config demo/vite.config.ts",
     "deploy": "wrangler deploy",
-    "deploy:dry": "wrangler deploy --dry-run"
+    "deploy:dry": "wrangler deploy --dry-run",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "qrcode-generator": "^2.0.4"
@@ -74,5 +84,16 @@
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.0",
     "wrangler": "^4.160.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orozcoh/qr-stream.git"
+  },
+  "homepage": "https://github.com/orozcoh/qr-stream#readme",
+  "bugs": {
+    "url": "https://github.com/orozcoh/qr-stream/issues"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

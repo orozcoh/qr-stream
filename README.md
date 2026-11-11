@@ -148,7 +148,23 @@ await readQrStream({ video, decode });
 no QR library; only `qr-stream/browser/zxing` does. If you forget to install the
 peer, the bundler fails at build time naming the package.
 
-`createZXingDecoder` is the only decoder provided, and that is deliberate.
+`createZXingDecoder` is the only decoder provided. That is a deliberate
+decision, and the interface above is what keeps it a decision rather than a
+lock-in: adding another decoder later is purely additive.
+
+What we know, separated by how we know it:
+
+- **Measured:** `BarcodeDetector` cannot carry this stream. Against a real
+  packet it reports `found: 1` and returns an empty `rawValue`, because a
+  packet is binary by construction (magic, u32 fields, CRC) and its only
+  output is text. An ASCII payload round-trips through the same pipeline
+  byte-perfect, so the detector works — the format does not fit.
+- **Believed, not measured:** jsQR (~40 KB gzipped, binary-safe via
+  `binaryData`) is weaker than ZXing on dense codes at 10-15 fps, and it has
+  had no release since 2019. We have not benchmarked it against this
+  project's frames, so treat that as an expectation rather than a finding.
+- **Structural:** the decoder is injected, so swapping one in a project that
+  needs smaller output costs an import, not a fork.
 `BarcodeDetector` — the built-in alternative, and free of bytes — exposes its
 result as `rawValue`, a **string**. Measured against a real packet in Chrome:
 the detector finds the code and returns an empty string, because a packet is
@@ -184,6 +200,12 @@ raising ECC pays for that tolerance twice.
 The demo quantises the requested frame rate to a divisor of the display refresh
 rate, because a code shown for a non-integer number of refreshes gets captured
 mid-switch as blur.
+
+## Runtime requirements
+
+The core needs `CompressionStream` and `crypto.subtle`; Node 20+ or any
+current browser. The React entry needs React 19. The decoder needs
+`zxing-wasm`, installed separately.
 
 ## Testing
 
