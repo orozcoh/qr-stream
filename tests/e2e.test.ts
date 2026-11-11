@@ -66,9 +66,14 @@ describe('core end to end', () => {
     expect(Array.from(result?.data ?? [])).toEqual([42]);
   });
 
-  test('a 250 KiB payload completes', async () => {
+  test('a 250 KiB incompressible payload completes', async () => {
+    // Pseudo-random, so gzip cannot shrink it and k stays at the realistic
+    // worst case (~306 blocks). A repeating pattern compresses to a handful of
+    // blocks, which makes the fixed 25%-loss window flaky for reasons that have
+    // nothing to do with the codec.
     const payload = new Uint8Array(250 * 1024);
-    for (let i = 0; i < payload.length; i += 1) payload[i] = (i * 31) & 0xff;
+    const rand = lcg(2026);
+    for (let i = 0; i < payload.length; i += 1) payload[i] = Math.floor(rand() * 256);
     const result = await roundTrip(payload, 'fast');
     expect(result?.data.length).toBe(payload.length);
     expect(Array.from(result?.data.slice(0, 8) ?? [])).toEqual(Array.from(payload.slice(0, 8)));
