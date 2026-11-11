@@ -39,6 +39,7 @@ export function useCameraReader(options: UseCameraReaderOptions = {}): UseCamera
         const controller = await readQrStream({
           video: videoRef.current,
           ...(options.wasmUrl ? { wasmUrl: options.wasmUrl } : {}),
+          ...(options.deviceId ? { deviceId: options.deviceId } : {}),
         });
         if (cancelled) {
           controller.stop();

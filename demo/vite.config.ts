@@ -11,7 +11,6 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
       manifest: {
         name: 'qr-stream',
         short_name: 'qr-stream',

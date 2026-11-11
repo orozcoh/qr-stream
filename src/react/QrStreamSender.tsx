@@ -12,6 +12,7 @@ export interface QrStreamSenderProps {
 export function QrStreamSender({ onRunningChange, className }: QrStreamSenderProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<RenderController | null>(null);
+  const runningRef = useRef(false);
 
   const [data, setData] = useState<Uint8Array | null>(null);
   const [filename, setFilename] = useState('payload.json');
@@ -31,11 +32,10 @@ export function QrStreamSender({ onRunningChange, className }: QrStreamSenderPro
   const stop = useCallback(() => {
     controllerRef.current?.stop();
     controllerRef.current = null;
+    runningRef.current = false;
     setRunning(false);
     onRunningChange?.(false);
   }, [onRunningChange]);
-
-  useEffect(() => stop, [stop]);
 
   const start = useCallback(() => {
     if (!writer || !canvasRef.current) return;
@@ -48,9 +48,20 @@ export function QrStreamSender({ onRunningChange, className }: QrStreamSenderPro
       version: PRESETS[preset].version,
     });
     controllerRef.current.play();
+    runningRef.current = true;
     setRunning(true);
     onRunningChange?.(true);
   }, [fps, onRunningChange, preset, writer]);
+
+  useEffect(() => stop, [stop]);
+
+  // A new writer means new blockSize, new K, or a different encryption state.
+  // Continuing to paint the old one would keep sending cleartext after a
+  // passphrase was typed, so a settings change restarts the stream.
+  useEffect(() => {
+    if (!runningRef.current) return;
+    start();
+  }, [writer, start]);
 
   useEffect(() => {
     controllerRef.current?.setFps(fps);

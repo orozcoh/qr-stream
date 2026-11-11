@@ -35,7 +35,12 @@ export interface RenderOptions {
   canvas: HTMLCanvasElement;
   fps: number;
   version: number;
+  /** Display refresh rate used to quantise `fps`. Defaults to 60. */
+  refreshHz?: number;
 }
+
+/** Packets kept ready ahead of the paint loop. Enough to absorb jitter, not more. */
+const QUEUE_CAP = 3;
 
 /**
  * Animate packets into a canvas.
@@ -46,6 +51,7 @@ export interface RenderOptions {
  */
 export function renderQrStream(options: RenderOptions): RenderController {
   const { canvas, packets, version } = options;
+  const refreshHz = options.refreshHz ?? 60;
   const context = canvas.getContext('2d');
   if (context === null) throw new Error('canvas 2d context unavailable');
 
@@ -53,30 +59,34 @@ export function renderQrStream(options: RenderOptions): RenderController {
   const sourceContext = source.getContext('2d');
   if (sourceContext === null) throw new Error('offscreen 2d context unavailable');
 
-  let fps = options.fps;
+  let fps = quantizeFps(options.fps, refreshHz);
   let painted = 0;
   let running = false;
   let frameHandle = 0;
   let accumulator = 0;
   let lastTime = 0;
-  let queue: Uint8Array[] = [];
+  const queue: Uint8Array[] = [];
   let exhausted = false;
   let preparing = false;
 
   const iterator = packets[Symbol.asyncIterator]();
 
+  /** Top up to the cap. Never fetch a fixed batch, or the queue grows forever. */
   const prepare = async (): Promise<void> => {
     if (preparing || exhausted) return;
     preparing = true;
-    for (let i = 0; i < 8; i += 1) {
-      const { value, done } = await iterator.next();
-      if (done) {
-        exhausted = true;
-        break;
+    try {
+      while (queue.length < QUEUE_CAP) {
+        const { value, done } = await iterator.next();
+        if (done) {
+          exhausted = true;
+          break;
+        }
+        queue.push(value as Uint8Array);
       }
-      queue.push(value as Uint8Array);
+    } finally {
+      preparing = false;
     }
-    preparing = false;
   };
 
   const paintNext = (): void => {
@@ -110,6 +120,10 @@ export function renderQrStream(options: RenderOptions): RenderController {
 
   const tick = (time: number): void => {
     if (!running) return;
+
+    // Schedule before painting so a throwing frame can never stop the clock.
+    frameHandle = requestAnimationFrame(tick);
+
     if (lastTime === 0) lastTime = time;
     const delta = time - lastTime;
     lastTime = time;
@@ -121,9 +135,13 @@ export function renderQrStream(options: RenderOptions): RenderController {
       accumulator -= interval;
       advanced = true;
     }
-    if (advanced) paintNext();
+    if (!advanced) return;
 
-    frameHandle = requestAnimationFrame(tick);
+    try {
+      paintNext();
+    } catch {
+      // A bad packet must not kill the stream; skip it and keep the loop alive.
+    }
   };
 
   return {
@@ -140,12 +158,12 @@ export function renderQrStream(options: RenderOptions): RenderController {
       cancelAnimationFrame(frameHandle);
     },
     setFps(next: number) {
-      fps = Math.max(1, next);
+      fps = quantizeFps(next, refreshHz);
     },
     stop() {
       running = false;
       cancelAnimationFrame(frameHandle);
-      queue = [];
+      queue.length = 0;
       void iterator.return?.(undefined);
     },
     framesPainted: () => painted,

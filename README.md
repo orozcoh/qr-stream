@@ -144,15 +144,26 @@ mid-switch as blur.
 ## Testing
 
 ```bash
-pnpm test          # 99 tests, DOM-free
+pnpm test          # 103 tests, DOM-free
 pnpm typecheck
 pnpm build
+pnpm demo:build
 ```
 
 The highest-value test is `tests/loopback.test.ts`: it rasterises real packets
 and decodes them with the same `zxing-wasm` build the receiver uses. No camera
 involved. Density bugs are silent until a camera is pointed at them, so this
-runs in CI.
+runs in the suite.
+
+## Consuming the built package
+
+`dist/` ships ESM plus declarations whose relative imports are extensionless, so
+consumers should use `"moduleResolution": "bundler"` (the default for Vite,
+Next, and modern webpack). A Node16/NodeNext consumer will need to point at the
+sources or add the extensions itself.
+
+All four entry points are verified by installing the package into an empty
+project and importing it, not just by running the tests.
 
 ## Limits
 

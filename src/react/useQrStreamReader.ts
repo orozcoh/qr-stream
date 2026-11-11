@@ -13,6 +13,8 @@ export interface UseQrStreamReaderResult {
   solveRate: number;
   result: { data: Uint8Array; meta: StreamMeta } | null;
   wrongKey: boolean;
+  /** Frames from a different transfer keep arriving while this one is stuck. */
+  stale: boolean;
   error: string | null;
   add(bytes: Uint8Array): void;
   retryKey(passphrase: string): Promise<void>;
@@ -20,6 +22,8 @@ export interface UseQrStreamReaderResult {
 }
 
 const RATE_WINDOW_MS = 1000;
+/** Consecutive foreign frames before we offer to abandon the locked session. */
+const STALE_PROMPT_THRESHOLD = 12;
 
 /**
  * Reassembles a stream and reports how fast it is going.
@@ -31,13 +35,22 @@ const RATE_WINDOW_MS = 1000;
 export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQrStreamReaderResult {
   const readerRef = useRef(createQrStreamReader());
   const stampsRef = useRef<number[]>([]);
+  const finishingRef = useRef(false);
+  const failedHardRef = useRef(false);
+  const staleRef = useRef(0);
+
   const [progress, setProgress] = useState({ solved: 0, k: 0 });
   const [solveRate, setSolveRate] = useState(0);
   const [result, setResult] = useState<{ data: Uint8Array; meta: StreamMeta } | null>(null);
   const [wrongKey, setWrongKey] = useState(false);
+  const [stale, setStale] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const finish = useCallback(async (passphrase: string | undefined) => {
+    // One derivation at a time: a burst of frames arriving together must not
+    // start several 600k-iteration PBKDF2 jobs.
+    if (finishingRef.current || failedHardRef.current) return;
+    finishingRef.current = true;
     try {
       const assembled = await readerRef.current.result(passphrase);
       if (assembled === null) return;
@@ -49,34 +62,47 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
         setWrongKey(true);
         setError('That passphrase does not match. Try again — no need to rescan.');
       } else {
+        // A checksum or decompression failure will fail identically forever;
+        // retrying it at camera frame rate would spin.
+        failedHardRef.current = true;
         setError(cause instanceof Error ? cause.message : String(cause));
       }
+    } finally {
+      finishingRef.current = false;
     }
   }, []);
 
   const add = useCallback(
     (bytes: Uint8Array) => {
       const outcome = readerRef.current.add(bytes);
+
+      if (outcome === 'stale-session') {
+        staleRef.current += 1;
+        if (staleRef.current === STALE_PROMPT_THRESHOLD) setStale(true);
+        return;
+      }
       if (outcome !== 'accepted') return;
+
+      staleRef.current = 0;
+      setStale(false);
 
       const now = performance.now();
       const stamps = stampsRef.current;
       stamps.push(now);
       while (stamps.length > 0 && now - (stamps[0] as number) > RATE_WINDOW_MS) stamps.shift();
 
-      setProgress(readerRef.current.progress());
+      const next = readerRef.current.progress();
+      setProgress(next);
       setSolveRate(stamps.length);
 
-      const { solved, k } = readerRef.current.progress();
-      if (k > 0 && solved === k && result === null && !wrongKey) {
-        void finish(options.passphrase);
-      }
+      if (next.k > 0 && next.solved === next.k) void finish(options.passphrase);
     },
-    [finish, options.passphrase, result, wrongKey],
+    [finish, options.passphrase],
   );
 
   const retryKey = useCallback(
     async (passphrase: string) => {
+      failedHardRef.current = false;
       await finish(passphrase);
     },
     [finish],
@@ -85,15 +111,19 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
   const reset = useCallback(() => {
     readerRef.current.reset();
     stampsRef.current = [];
+    finishingRef.current = false;
+    failedHardRef.current = false;
+    staleRef.current = 0;
     setProgress({ solved: 0, k: 0 });
     setSolveRate(0);
     setResult(null);
     setWrongKey(false);
+    setStale(false);
     setError(null);
   }, []);
 
   return useMemo(
-    () => ({ progress, solveRate, result, wrongKey, error, add, retryKey, reset }),
-    [progress, solveRate, result, wrongKey, error, add, retryKey, reset],
+    () => ({ progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset }),
+    [progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset],
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCameraReader } from './useCameraReader';
 import { useQrStreamReader } from './useQrStreamReader';
 
@@ -8,6 +8,8 @@ export interface QrStreamReceiverProps {
   wasmUrl?: string;
   /** `auto` shows the picker only when the device reports more than one camera. */
   cameraControls?: 'auto' | 'hidden' | 'always';
+  /** Offer a save link. On by default: a received file you cannot save is a dead end. */
+  download?: boolean;
   onComplete?(data: Uint8Array, filename: string): void;
   className?: string;
 }
@@ -16,26 +18,57 @@ export function QrStreamReceiver({
   passphrase,
   wasmUrl,
   cameraControls = 'auto',
+  download = true,
   onComplete,
   className,
 }: QrStreamReceiverProps) {
-  const { progress, solveRate, result, wrongKey, error, add, retryKey, reset } = useQrStreamReader({
+  const { progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset } = useQrStreamReader({
     ...(passphrase ? { passphrase } : {}),
   });
-  const { videoRef, devices, activeId, select, cycle, switching, error: cameraError } = useCameraReader({
+  const {
+    videoRef,
+    devices,
+    activeId,
+    select,
+    cycle,
+    switching,
+    error: cameraError,
+  } = useCameraReader({
     onSymbol: add,
     ...(wasmUrl ? { wasmUrl } : {}),
   });
 
   const [typedKey, setTypedKey] = useState('');
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const completedRef = useRef<Uint8Array | null>(null);
+
+  const complete = useCallback(
+    (data: Uint8Array, filename: string) => onComplete?.(data, filename),
+    [onComplete],
+  );
 
   useEffect(() => {
-    if (result) onComplete?.(result.data, result.meta.filename);
-  }, [result, onComplete]);
+    if (!result || completedRef.current === result.data) return;
+    completedRef.current = result.data;
+
+    if (download) {
+      const blob = new Blob([result.data as BlobPart], { type: 'application/json' });
+      setDownloadUrl(URL.createObjectURL(blob));
+    }
+    complete(result.data, result.meta.filename);
+  }, [result, download, complete]);
+
+  useEffect(
+    () => () => {
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    },
+    [downloadUrl],
+  );
 
   const percent = progress.k > 0 ? Math.round((progress.solved / progress.k) * 100) : 0;
   const showCameraPicker =
     cameraControls === 'always' || (cameraControls === 'auto' && devices.length > 1);
+  const showOverlaySwitch = cameraControls !== 'hidden' && devices.length > 1;
 
   return (
     <section className={className} style={{ display: 'grid', gap: 16 }}>
@@ -46,7 +79,7 @@ export function QrStreamReceiver({
           muted
           style={{ width: '100%', maxWidth: 640, aspectRatio: '4 / 3', background: '#000' }}
         />
-        {devices.length > 1 ? (
+        {showOverlaySwitch ? (
           <button
             type="button"
             onClick={() => void cycle()}
@@ -81,9 +114,19 @@ export function QrStreamReceiver({
         </p>
       </div>
 
+      {stale ? (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <p role="alert">
+            A different transfer is being sent. This one cannot finish from it.
+          </p>
+          <button type="button" onClick={() => reset()}>
+            Switch to the new transfer
+          </button>
+        </div>
+      ) : null}
+
       {wrongKey ? (
         <div style={{ display: 'grid', gap: 8 }}>
-          <p role="alert">Wrong passphrase. The transfer is already captured — just retype it.</p>
           <input
             type="password"
             value={typedKey}
@@ -98,8 +141,15 @@ export function QrStreamReceiver({
       ) : null}
 
       {result ? (
-        <div>
-          <p role="status">Received {result.meta.filename} — SHA-256 verified.</p>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <p role="status" style={{ margin: 0 }}>
+            Received {result.meta.filename} — SHA-256 verified.
+          </p>
+          {downloadUrl ? (
+            <a href={downloadUrl} download={result.meta.filename}>
+              <button type="button">Save file</button>
+            </a>
+          ) : null}
           <button type="button" onClick={() => reset()}>
             Receive another
           </button>

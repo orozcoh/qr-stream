@@ -35,22 +35,35 @@ async function roundTrip(payload: Uint8Array, preset: 'fast' | 'balanced', passp
   const rand = lcg(4242);
   const cap = writer.k * 20 + 50;
   let emitted = 0;
+  let batch: Uint8Array[] = [];
+
+  const drain = (): void => {
+    // Deliver out of order: a real camera never sees symbols in sequence.
+    for (let i = batch.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rand() * (i + 1));
+      [batch[i], batch[j]] = [batch[j] as Uint8Array, batch[i] as Uint8Array];
+    }
+    for (const packet of batch) reader.add(packet);
+    batch = [];
+  };
 
   // The real sender loops forever, so emit until the reader is satisfied rather
   // than through a fixed window: a fixed 1.5xK window is marginal when gzip has
   // collapsed the payload into only a few blocks.
   for await (const packet of writer.packets()) {
     emitted += 1;
-    if (rand() >= 0.25) reader.add(packet);
+    if (rand() >= 0.25) batch.push(packet);
+    if (batch.length >= 8) drain();
     if (reader.progress().solved === writer.k) break;
     if (emitted >= cap) break;
   }
+  drain();
 
   return reader.result(passphrase);
 }
 
 describe('core end to end', () => {
-  test('60 KB of JSON survives 25% loss and shuffled delivery', async () => {
+  test('60 KB of JSON survives 25% loss and out-of-order delivery', async () => {
     const payload = makeJson(500);
     expect(payload.length).toBeGreaterThan(50_000);
     const result = await roundTrip(payload, 'fast');

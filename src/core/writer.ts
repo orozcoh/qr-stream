@@ -4,7 +4,7 @@ import { encodeSymbol } from './fountain';
 import { encodeMeta, writeVarint, type StreamMeta } from './meta';
 import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet';
 import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS, type PresetName } from './types';
-import { qrCapacity } from '../qr/matrix';
+import { qrCapacity } from './capacity';
 
 export interface WriterOptions {
   filename: string;
@@ -44,9 +44,11 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
   const digest = await sha256(data);
   const compressed = await gzipIfSmaller(data);
 
-  const encrypted = options.passphrase
-    ? await encryptBytes(compressed.data, options.passphrase)
-    : null;
+  // Normalise before deciding: a passphrase of spaces would otherwise enable
+  // encryption with an empty key, showing a filled password field while anyone
+  // can decrypt with "".
+  const passphrase = options.passphrase?.normalize('NFKC').trim() ?? '';
+  const encrypted = passphrase.length > 0 ? await encryptBytes(compressed.data, passphrase) : null;
 
   const salt = encrypted?.salt;
   const nonce = encrypted?.nonce;

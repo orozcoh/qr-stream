@@ -17,12 +17,13 @@ denser code ever buys back.
 | 8 | 2 | `symbolIdx` | u16 | `< K` → source block, sent raw. `>= K` → repair symbol. |
 | 10 | 2 | `K` | u16 | Source block count. Constant for the session. |
 | 12 | 2 | `blockSize` | u16 | Bytes per block: `qrCapacity(version) − 20`. Constant for the session. |
-| 14 | 2 | `payloadLen` | u16 | Meaningful bytes in this block. Only the **last** source block is short; repair symbols are always full. |
-| 16 | `blockSize` | `payload` | bytes | Block data, zero-padded. Always full length on the wire. |
+| 14 | 2 | `payloadLen` | u16 | Always equals `blockSize`. Source blocks are zero-padded, so every frame is the same size and every symbol is XOR-compatible. |
+| 16 | `blockSize` | `payload` | bytes | Block data, zero-padded to `blockSize`. |
 | 16+N | 4 | `crc32` | u32 | IEEE 802.3 over bytes `0 … 16+N−1`. |
 
-`symbolIdx` for repairs cycles with period `65535 − K`, so an unbounded stream
-still fits the field.
+`symbolIdx` is sent as `n % 65535`, so an unbounded stream still fits the field.
+By the time it wraps, the transfer has long since completed; a wrapped symbol is
+simply a duplicate the reader ignores.
 
 A frame is rejected unless the magic matches, the total length is exactly
 `HEADER_SIZE + payloadLen + 4`, `payloadLen <= blockSize`, and the CRC matches.

@@ -5,6 +5,20 @@ import { decodePacket } from '../src/core/packet';
 import { decodeMeta } from '../src/core/meta';
 import { readVarint } from '../src/core/meta';
 
+function lcg(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+/** Incompressible, so the writer really produces several blocks. */
+function noisy(size: number, seed = 7): Uint8Array {
+  const rand = lcg(seed);
+  return Uint8Array.from({ length: size }, () => Math.floor(rand() * 256));
+}
+
 const take = async <T>(gen: AsyncGenerator<T>, count: number): Promise<T[]> => {
   const out: T[] = [];
   for await (const item of gen) {
@@ -34,7 +48,7 @@ describe('createQrStreamWriter', () => {
   });
 
   test('the first packet carries decodable metadata', async () => {
-    const writer = await createQrStreamWriter(new Uint8Array(3000).fill(66), {
+    const writer = await createQrStreamWriter(noisy(3000, 23), {
       filename: 'meta.json',
       preset: 'fast',
     });
@@ -49,7 +63,7 @@ describe('createQrStreamWriter', () => {
   });
 
   test('emits every source symbol then repairs', async () => {
-    const writer = await createQrStreamWriter(new Uint8Array(20000).fill(67), {
+    const writer = await createQrStreamWriter(noisy(20000), {
       filename: 'big.json',
       preset: 'fast',
     });
@@ -60,7 +74,7 @@ describe('createQrStreamWriter', () => {
   });
 
   test('every packet payload is exactly blockSize', async () => {
-    const writer = await createQrStreamWriter(new Uint8Array(5000).fill(68), {
+    const writer = await createQrStreamWriter(noisy(5000, 11), {
       filename: 'x.json',
       preset: 'balanced',
     });

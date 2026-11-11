@@ -1,25 +1,11 @@
 import qrcode from 'qrcode-generator';
+import { qrCapacity } from '../core/capacity';
 
-/**
- * Byte-mode capacity at ECC level L, indexed by QR version (1-40).
- * Source: the QR specification's character capacity table.
- */
-const CAPACITY_L: readonly number[] = [
-  17, 32, 53, 78, 106, 134, 154, 192, 230, 271,
-  321, 367, 425, 458, 520, 586, 644, 718, 792, 858,
-  929, 1003, 1091, 1171, 1273, 1367, 1465, 1528, 1628, 1732,
-  1840, 1952, 2068, 2188, 2303, 2431, 2563, 2699, 2809, 2953,
-];
-
-export function qrCapacity(version: number): number {
-  const capacity = CAPACITY_L[version - 1];
-  if (capacity === undefined) throw new RangeError(`QR version out of range: ${version}`);
-  return capacity;
-}
+export { qrCapacity } from '../core/capacity';
 
 export interface QrMatrix {
   version: number;
-  /** Modules per side, including the quiet zone. */
+  /** Modules per side, excluding the quiet zone. */
   size: number;
   get(x: number, y: number): boolean;
 }
@@ -33,18 +19,16 @@ function toLatin1(bytes: Uint8Array): string {
   return text;
 }
 
-qrcode.stringToBytes = (text: string): number[] => {
-  const out = new Array<number>(text.length);
-  for (let i = 0; i < text.length; i += 1) out[i] = text.charCodeAt(i) & 0xff;
-  return out;
-};
-
 /**
  * Render one packet as a QR matrix, forcing the version.
  *
  * The version must be pinned: a QR that changes size mid-stream makes the
  * receiving camera re-hunt scale and position on every frame, which costs more
  * throughput than a denser code ever buys back.
+ *
+ * The encoder's byte conversion is overridden only for the duration of this
+ * call. Doing it at module load would silently change `qrcode-generator` for
+ * every other consumer in the same page.
  */
 export function packetToMatrix(packet: Uint8Array, version: number): QrMatrix {
   const capacity = qrCapacity(version);
@@ -52,15 +36,24 @@ export function packetToMatrix(packet: Uint8Array, version: number): QrMatrix {
     throw new RangeError(`packet is ${packet.length} bytes; version ${version}-L holds ${capacity}`);
   }
 
-  const qr = qrcode(version as Parameters<typeof qrcode>[0], 'L');
-  qr.addData(toLatin1(packet), 'Byte');
+  const knownGood = qrcode.stringToBytes;
+  qrcode.stringToBytes = (text: string): number[] => {
+    const out = new Array<number>(text.length);
+    for (let i = 0; i < text.length; i += 1) out[i] = text.charCodeAt(i) & 0xff;
+    return out;
+  };
 
+  let qr: ReturnType<typeof qrcode>;
   try {
+    qr = qrcode(version as Parameters<typeof qrcode>[0], 'L');
+    qr.addData(toLatin1(packet), 'Byte');
     qr.make();
   } catch (error) {
     throw new RangeError(
       `packet does not fit QR version ${version}: ${error instanceof Error ? error.message : String(error)}`,
     );
+  } finally {
+    qrcode.stringToBytes = knownGood;
   }
 
   const size = qr.getModuleCount();
