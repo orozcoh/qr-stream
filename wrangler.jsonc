@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "qr-stream",
+  "compatibility_date": "2026-11-11",
+  "workers_dev": false,
+  "assets": {
+    "directory": "./demo/dist"
+  },
+  "routes": [
+    {
+      "pattern": "qr-stream.digitalerror.xyz",
+      "custom_domain": true
+    }
+  ]
+}

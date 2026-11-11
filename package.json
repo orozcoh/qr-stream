@@ -38,7 +38,9 @@
     "dev": "vite",
     "demo:build": "vite build --config demo/vite.config.ts",
     "demo:preview": "vite preview --config demo/vite.config.ts",
-    "demo:dev": "vite --config demo/vite.config.ts"
+    "demo:dev": "vite --config demo/vite.config.ts",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run"
   },
   "dependencies": {
     "qrcode-generator": "^2.0.4",
@@ -67,6 +69,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.7",
     "vite-plugin-pwa": "^2.0.0",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.160.0"
   }
 }

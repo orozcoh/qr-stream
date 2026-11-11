@@ -155,6 +155,58 @@ and decodes them with the same `zxing-wasm` build the receiver uses. No camera
 involved. Density bugs are silent until a camera is pointed at them, so this
 runs in the suite.
 
+## Deploy
+
+The demo is a static bundle served by a Worker with no script — Cloudflare
+serves the assets directly, so requests for the app cost nothing.
+
+```bash
+pnpm demo:build          # -> demo/dist
+pnpm deploy:dry          # validate config + asset resolution, uploads nothing
+pnpm deploy              # npx wrangler deploy, needs credentials
+```
+
+`wrangler.jsonc` pins `workers_dev: false`, so the only origin is
+`qr-stream.digitalerror.xyz`. That matters for a PWA: an installed app is
+scoped to its origin, so leaving a `*.workers.dev` URL alive would give you two
+independent installs and two independent caches of the same app.
+
+### Prerequisites, once
+
+1. The `digitalerror.xyz` zone must be active on the same Cloudflare account.
+2. `qr-stream.digitalerror.xyz` must **not** already have a CNAME — Cloudflare
+   refuses a Custom Domain over an existing record. Delete it in DNS first.
+3. Create an API token with:
+   - Account → **Workers Scripts: Edit**
+   - Zone → **Workers Routes: Edit**
+   - Zone → **DNS: Edit** (the custom-domain attach writes DNS and a certificate)
+
+   Add it as the repo secret `CLOUDFLARE_API_TOKEN`, and your account id as
+   `CLOUDFLARE_ACCOUNT_ID`.
+
+   If you would rather not give CI DNS rights, attach the domain once in the
+   dashboard (*Settings → Domains & Routes → Add → Custom Domain*) and delete
+   the `routes` entry from `wrangler.jsonc`; then `Workers Scripts: Edit` alone
+   is enough.
+
+### Continuous deployment
+
+`.github/workflows/deploy.yml` runs on every push and pull request:
+
+- **PRs**: install, typecheck, test, build the library, build the demo. No credentials.
+- **`main`**: the same, then `wrangler deploy`. Manual dispatch deploys whichever
+  branch you pick to the same Worker.
+
+There are no preview deployments. A `wrangler versions upload` preview keeps
+every version in the account; each `deploy` instead replaces the last one, so
+only one version is ever live.
+
+### After the first deploy
+
+Open `https://qr-stream.digitalerror.xyz` on each device once and install it.
+That single visit is what caches the app and the WASM decoder; after it, the
+devices work with no network at all.
+
 ## Consuming the built package
 
 `dist/` ships ESM plus declarations whose relative imports are extensionless, so

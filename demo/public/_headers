@@ -1,0 +1,15 @@
+# Headers for the static demo. Workers parses this file and does not serve it.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(self)
+
+# Vite fingerprints everything under /assets (index-f6qBg2v8.js,
+# zxing_reader-BCjuyud6.wasm), so those can be cached forever. Everything at
+# the root — sw.js, registerSW.js, index.html, manifest.webmanifest — keeps the
+# default `max-age=0, must-revalidate`, which is what lets the service worker
+# pick up a new deploy instead of pinning the old precache.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

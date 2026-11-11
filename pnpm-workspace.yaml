@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: true
+  workerd: true
+# pnpm 11 reads build-script allowances from here, not package.json.
+# workerd is Wrangler's local runtime; esbuild is Vite's transformer.
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
