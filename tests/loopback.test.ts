@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 
 beforeAll(async () => {
   const wasmBinary = readFileSync(require.resolve('zxing-wasm/reader/zxing_reader.wasm'));
-  await prepareZXingModule({ overrides: { wasmBinary } });
+  await prepareZXingModule({ overrides: { wasmBinary: new Uint8Array(wasmBinary).buffer } });
 });
 
 async function decode(image: { data: Uint8ClampedArray; width: number; height: number }) {

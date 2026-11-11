@@ -70,7 +70,10 @@ describe('createQrStreamReader', () => {
     await expect(reader.result('wrong')).rejects.toBeInstanceOf(WrongKeyError);
 
     const retried = await reader.result('blue seven kilo');
-    expect(new TextDecoder().decode(retried.data)).toBe(new TextDecoder().decode(json));
+    expect(retried).not.toBeNull();
+    expect(new TextDecoder().decode((retried as { data: Uint8Array }).data)).toBe(
+      new TextDecoder().decode(json),
+    );
   });
 
   test('reset forgets the session', async () => {

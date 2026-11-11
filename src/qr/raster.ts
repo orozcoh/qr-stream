@@ -1,7 +1,7 @@
 import type { QrMatrix } from './matrix';
 
 export interface RasterImage {
-  data: Uint8ClampedArray;
+  data: Uint8ClampedArray<ArrayBuffer>;
   width: number;
   height: number;
 }

@@ -52,7 +52,7 @@ export function packetToMatrix(packet: Uint8Array, version: number): QrMatrix {
     throw new RangeError(`packet is ${packet.length} bytes; version ${version}-L holds ${capacity}`);
   }
 
-  const qr = qrcode(version, 'L');
+  const qr = qrcode(version as Parameters<typeof qrcode>[0], 'L');
   qr.addData(toLatin1(packet), 'Byte');
 
   try {
