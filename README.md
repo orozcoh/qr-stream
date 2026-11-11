@@ -31,7 +31,7 @@ Consequences worth knowing:
   sender, because both people are standing next to each other.
 - Failing to finish is not a failure state — it means "keep pointing".
 
-Payload limits: JSON only, **250 KiB**. Typical JSON compresses 3–8×, so the
+Payload limits: JSON only, **1 MiB**. Typical JSON compresses 3–8×, so the
 common case transfers in a few seconds.
 
 ## Install the demo
@@ -126,12 +126,12 @@ Two things bite exactly once, in the room, when you cannot debug them:
 
 ## Presets
 
-| Preset | QR version | Bytes/frame | Default fps | Frames for 250 KiB |
+| Preset | QR version | Bytes/frame | Default fps | Blocks for 1 MiB |
 |---|---|---|---|---|
-| `fast` | 20 | 838 | 15 | ~306 |
-| `balanced` | 25 | 1253 | 12 | ~205 |
-| `dense` | 30 | 1712 | 10 | ~150 |
-| `extreme` | 40 | 2933 | 6 | ~88 |
+| `fast` | 20 | 838 | 15 | ~1252 |
+| `balanced` | 25 | 1253 | 12 | ~838 |
+| `dense` | 30 | 1712 | 10 | ~614 |
+| `extreme` | 40 | 2933 | 6 | ~358 |
 
 All presets use error-correction level **L**. Every frame carries a CRC-32, so a
 misread frame is dropped and becomes an erasure the fountain code absorbs;
@@ -144,7 +144,7 @@ mid-switch as blur.
 ## Testing
 
 ```bash
-pnpm test          # 103 tests, DOM-free
+pnpm test          # 115 tests, DOM-free
 pnpm typecheck
 pnpm build
 pnpm demo:build
@@ -221,8 +221,10 @@ project and importing it, not just by running the tests.
 
 - One file per transfer. No resume across a reload — a human restarts it.
 - No history, no chat, no two-way stream.
-- ~15 KB/s at best. A 250 KiB incompressible file is about 20 seconds of
-  holding a phone steady.
+- **1 MiB is minutes, not seconds.** At the `fast` preset an incompressible
+  megabyte is K = 1252 blocks, roughly 146 seconds of scanning at 1.75x
+  overhead. JSON compresses 3-8x, so a typical 1 MiB document finishes in
+  15-30 seconds. The sender shows the estimate once the file is loaded.
 - Encryption protects against a bystander recording the screen. It does not
   protect against a weak passphrase: a spoken three-word phrase is crackable
   offline in about a day. Six words or a random passphrase.

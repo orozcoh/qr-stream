@@ -21,5 +21,12 @@ export const HEADER_SIZE = 16;
 /** Header plus CRC-32: the number of bytes a frame spends on framing. */
 export const FRAME_OVERHEAD = HEADER_SIZE + 4;
 
-/** Largest accepted input, in bytes. */
-export const MAX_INPUT_BYTES = 250 * 1024;
+/**
+ * Largest accepted input, in bytes.
+ *
+ * The practical ceiling is wall clock, not the wire format: 1 MiB of
+ * incompressible data at the `fast` preset is K = 1252 blocks, which is ~146
+ * seconds of scanning. JSON compresses 3-8x, so the realistic case is far
+ * shorter, and the sender shows the estimate before you start.
+ */
+export const MAX_INPUT_BYTES = 1024 * 1024;

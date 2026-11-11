@@ -21,6 +21,18 @@ export function quantizeFps(fps: number, refreshHz = 60): number {
   return best;
 }
 
+/**
+ * Rough wall clock for a transfer, in seconds.
+ *
+ * `overhead` is the fountain's measured cost: a receiver needs about 1.75x the
+ * block count in symbols before it can close. Showing this up front is the only
+ * honest way to present a 1 MiB payload, which is minutes of scanning.
+ */
+export function estimateTransferSeconds(k: number, fps: number, overhead = 1.75): number {
+  if (k <= 0 || fps <= 0) return 0;
+  return Math.ceil((k * overhead) / fps);
+}
+
 export interface RenderController {
   play(): void;
   pause(): void;

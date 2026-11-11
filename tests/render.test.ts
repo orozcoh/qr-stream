@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { quantizeFps } from '../src/browser/render';
+import { estimateTransferSeconds, quantizeFps } from '../src/browser/render';
 
 describe('quantizeFps', () => {
   test('never exceeds the requested rate', () => {
@@ -29,5 +29,22 @@ describe('quantizeFps', () => {
   test('clamps nonsense to one frame per second', () => {
     expect(quantizeFps(0.4, 60)).toBe(1);
     expect(quantizeFps(Number.NaN, 60)).toBe(1);
+  });
+});
+
+describe('estimateTransferSeconds', () => {
+  test('scales with block count and frame rate', () => {
+    expect(estimateTransferSeconds(100, 10)).toBe(18);
+    expect(estimateTransferSeconds(100, 20)).toBe(9);
+  });
+
+  test('returns 0 for degenerate input', () => {
+    expect(estimateTransferSeconds(0, 10)).toBe(0);
+    expect(estimateTransferSeconds(100, 0)).toBe(0);
+  });
+
+  test('1 MiB at the fast preset is minutes, not seconds', () => {
+    // 1252 blocks at 15 fps with 1.75x fountain overhead.
+    expect(estimateTransferSeconds(1252, 15)).toBeGreaterThan(120);
   });
 });

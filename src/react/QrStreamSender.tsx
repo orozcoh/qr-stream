@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MAX_INPUT_BYTES, PRESETS, type PresetName } from '../core/types';
-import { renderQrStream, type RenderController } from '../browser/render';
+import { estimateTransferSeconds, quantizeFps, renderQrStream, type RenderController } from '../browser/render';
 import { useQrStreamWriter } from './useQrStreamWriter';
 
 export interface QrStreamSenderProps {
@@ -70,7 +70,7 @@ export function QrStreamSender({ onRunningChange, className }: QrStreamSenderPro
   const pickFile = async (file: File | undefined): Promise<void> => {
     if (!file) return;
     if (file.size > MAX_INPUT_BYTES) {
-      setNotice(`That file is ${Math.round(file.size / 1024)} KB. The limit is 250 KB.`);
+      setNotice(`That file is ${Math.round(file.size / 1024)} KB. The limit is 1 MB.`);
       setData(null);
       return;
     }
@@ -78,6 +78,10 @@ export function QrStreamSender({ onRunningChange, className }: QrStreamSenderPro
     setFilename(file.name);
     setData(new Uint8Array(await file.arrayBuffer()));
   };
+
+  const seconds = writer ? estimateTransferSeconds(writer.k, quantizeFps(fps)) : 0;
+  const estimate =
+    seconds >= 60 ? `~${Math.floor(seconds / 60)} min ${seconds % 60} s` : `~${seconds} s`;
 
   return (
     <section className={className} style={{ display: 'grid', gap: 16 }}>
@@ -120,7 +124,7 @@ export function QrStreamSender({ onRunningChange, className }: QrStreamSenderPro
       </label>
 
       <label>
-        Speed: {fps} fps {writer ? `· ${writer.k} blocks` : ''}
+        Speed: {fps} fps {writer ? `· ${writer.k} blocks · ${estimate} to receive` : ''}
         <input
           type="range"
           min={1}

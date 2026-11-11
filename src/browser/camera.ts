@@ -4,6 +4,26 @@ export interface CameraDevice {
   deviceId: string;
   label: string;
   facing: 'environment' | 'user' | 'unknown';
+  /** Cameras sharing a group sit on the same physical module. */
+  groupId: string;
+}
+
+/** Non-standard track capabilities that Chrome exposes but the DOM types omit. */
+export interface CameraCapabilities {
+  zoom?: { min: number; max: number; step?: number };
+  focusMode?: string[];
+  torch?: boolean;
+  [key: string]: unknown;
+}
+
+export interface CameraDiagnostics {
+  devices: CameraDevice[];
+  active: {
+    deviceId: string | null;
+    label: string;
+    settings: MediaTrackSettings;
+    capabilities: CameraCapabilities;
+  } | null;
 }
 
 export interface CameraController {
@@ -15,6 +35,12 @@ export interface CameraController {
   stop(): void;
   onSymbol(callback: (bytes: Uint8Array) => void): void;
   onError(callback: (error: string) => void): void;
+  /** What the browser actually reports — the only way to explain a short list. */
+  diagnostics(): CameraDiagnostics;
+  /** Reopens the current camera and enumerates again. */
+  rescan(): Promise<void>;
+  zoomRange(): { min: number; max: number; step: number } | null;
+  setZoom(value: number): Promise<void>;
 }
 
 export interface ReadOptions {
@@ -44,7 +70,7 @@ function describe(device: MediaDeviceInfo, index: number): CameraDevice {
       : facing === 'user'
         ? `Front camera ${index + 1}`
         : `Camera ${index + 1}`;
-  return { deviceId: device.deviceId, label: device.label || fallback, facing };
+  return { deviceId: device.deviceId, label: device.label || fallback, facing, groupId: device.groupId };
 }
 
 /**
@@ -233,6 +259,49 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
       const index = pool.findIndex((device) => device.deviceId === active);
       const next = pool[(index + 1) % pool.length] as CameraDevice;
       await select(next.deviceId);
+    },
+
+    diagnostics(): CameraDiagnostics {
+      const track = stream?.getVideoTracks()[0] ?? null;
+      if (!track) return { devices: tracks, active: null };
+      return {
+        devices: tracks,
+        active: {
+          deviceId: active,
+          label: track.label,
+          settings: track.getSettings(),
+          capabilities: track.getCapabilities() as CameraCapabilities,
+        },
+      };
+    },
+
+    async rescan(): Promise<void> {
+      // Some Android builds only reveal secondary rear cameras once a stream
+      // has actually been opened and enumerated again.
+      const previous = active;
+      await open(
+        previous
+          ? { video: { deviceId: { exact: previous } } }
+          : { video: { facingMode: { ideal: 'environment' } } },
+      );
+    },
+
+    zoomRange() {
+      const track = stream?.getVideoTracks()[0];
+      const zoom = (track?.getCapabilities() as CameraCapabilities | undefined)?.zoom;
+      if (!zoom) return null;
+      return { min: zoom.min, max: zoom.max, step: zoom.step ?? 0.1 };
+    },
+
+    async setZoom(value: number): Promise<void> {
+      const track = stream?.getVideoTracks()[0];
+      if (!track) return;
+      try {
+        // `zoom` is a Chrome extension, absent from the DOM constraint types.
+        await track.applyConstraints({ advanced: [{ zoom: value } as unknown as MediaTrackConstraintSet] });
+      } catch {
+        report('This camera does not accept a zoom setting.');
+      }
     },
 
     stop(): void {

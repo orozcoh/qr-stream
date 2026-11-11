@@ -19,7 +19,7 @@ describe('shared constants', () => {
     expect(PRESETS.extreme.version).toBe(40);
   });
 
-  test('input cap is 250 KiB', () => {
-    expect(MAX_INPUT_BYTES).toBe(256000);
+  test('input cap is 1 MiB', () => {
+    expect(MAX_INPUT_BYTES).toBe(1048576);
   });
 });

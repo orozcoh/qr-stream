@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { readQrStream, type CameraController, type CameraDevice } from '../browser/camera';
+import {
+  readQrStream,
+  type CameraController,
+  type CameraDevice,
+  type CameraDiagnostics,
+} from '../browser/camera';
 
 export interface UseCameraReaderOptions {
   deviceId?: string;
@@ -13,9 +18,16 @@ export interface UseCameraReaderResult {
   activeId: string | null;
   select(id: string): Promise<void>;
   cycle(): Promise<void>;
+  /** Reopens the camera and enumerates again, for browsers that list lazily. */
+  rescan(): Promise<void>;
   switching: boolean;
   error: string | null;
   ready: boolean;
+  /** Everything the browser reports, for diagnosing a short camera list. */
+  diagnostics: CameraDiagnostics | null;
+  zoom: { min: number; max: number; step: number } | null;
+  zoomValue: number;
+  setZoom(value: number): Promise<void>;
 }
 
 export function useCameraReader(options: UseCameraReaderOptions = {}): UseCameraReaderResult {
@@ -26,9 +38,23 @@ export function useCameraReader(options: UseCameraReaderOptions = {}): UseCamera
 
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<CameraDiagnostics | null>(null);
+  const [zoom, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [zoomValue, setZoomValue] = useState(0);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  const sync = useCallback((): void => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    setDevices(controller.devices());
+    setActiveId(controller.activeId());
+    setDiagnostics(controller.diagnostics());
+    const range = controller.zoomRange();
+    setZoomRange(range);
+    if (range) setZoomValue(range.min);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,8 +74,7 @@ export function useCameraReader(options: UseCameraReaderOptions = {}): UseCamera
         controllerRef.current = controller;
         controller.onSymbol((bytes) => symbolRef.current?.(bytes));
         controller.onError((message) => setError(message));
-        setDevices(controller.devices());
-        setActiveId(controller.activeId());
+        sync();
         setReady(true);
       } catch (cause) {
         if (!cancelled) {
@@ -65,33 +90,60 @@ export function useCameraReader(options: UseCameraReaderOptions = {}): UseCamera
       controllerRef.current?.stop();
       controllerRef.current = null;
     };
-    // The camera is opened once per mount; `wasmUrl` is static configuration.
+    // The camera is opened once per mount; `wasmUrl` and `deviceId` are initial
+    // configuration, not something to react to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const select = useCallback(async (id: string) => {
-    setSwitching(true);
-    try {
-      await controllerRef.current?.select(id);
-      const controller = controllerRef.current;
-      setDevices(controller?.devices() ?? []);
-      setActiveId(controller?.activeId() ?? null);
-    } finally {
-      setSwitching(false);
-    }
-  }, []);
+  const runSwitch = useCallback(
+    async (action: () => Promise<void> | void) => {
+      setSwitching(true);
+      try {
+        await action();
+        sync();
+      } finally {
+        setSwitching(false);
+      }
+    },
+    [sync],
+  );
 
-  const cycle = useCallback(async () => {
-    setSwitching(true);
-    try {
-      await controllerRef.current?.cycle();
-      const controller = controllerRef.current;
-      setDevices(controller?.devices() ?? []);
-      setActiveId(controller?.activeId() ?? null);
-    } finally {
-      setSwitching(false);
-    }
-  }, []);
+  const select = useCallback(
+    (id: string) => runSwitch(() => controllerRef.current?.select(id)),
+    [runSwitch],
+  );
 
-  return { videoRef, devices, activeId, select, cycle, switching, error, ready };
+  const cycle = useCallback(
+    () => runSwitch(() => controllerRef.current?.cycle()),
+    [runSwitch],
+  );
+
+  const rescan = useCallback(
+    () => runSwitch(() => controllerRef.current?.rescan()),
+    [runSwitch],
+  );
+
+  const setZoom = useCallback(
+    async (value: number) => {
+      setZoomValue(value);
+      await controllerRef.current?.setZoom(value);
+    },
+    [],
+  );
+
+  return {
+    videoRef,
+    devices,
+    activeId,
+    select,
+    cycle,
+    rescan,
+    switching,
+    error,
+    ready,
+    diagnostics,
+    zoom,
+    zoomValue,
+    setZoom,
+  };
 }

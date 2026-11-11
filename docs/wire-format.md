@@ -58,7 +58,7 @@ bytes, the extra 16 being the GCM tag).
 ## Pipeline
 
 ```
-JSON bytes (≤ 250 KiB)
+JSON bytes (≤ 1 MiB)
   → gzip                     only when it shrinks the payload
   → AES-256-GCM              only when a passphrase is given
   → meta + wireBytes
@@ -83,12 +83,12 @@ Byte-mode capacity at ECC L, by QR version:
 | Capacity | 858 | 1273 | 1732 | 2303 | 2953 |
 | Block size | 838 | 1253 | 1712 | 2283 | 2933 |
 
-| Preset | Version | Bytes/frame | Default fps | Frames for 250 KiB |
+| Preset | Version | Bytes/frame | Default fps | Blocks for 1 MiB |
 |---|---|---|---|---|
-| `fast` | 20 | 838 | 15 | ~306 |
-| `balanced` | 25 | 1253 | 12 | ~205 |
-| `dense` | 30 | 1712 | 10 | ~150 |
-| `extreme` | 40 | 2933 | 6 | ~88 |
+| `fast` | 20 | 838 | 15 | ~1252 |
+| `balanced` | 25 | 1253 | 12 | ~838 |
+| `dense` | 30 | 1712 | 10 | ~614 |
+| `extreme` | 40 | 2933 | 6 | ~358 |
 
 ECC is always **L**. Every frame carries a CRC-32, so a misread frame is simply
 dropped and becomes an erasure the fountain code already absorbs. Raising ECC

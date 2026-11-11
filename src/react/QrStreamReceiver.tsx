@@ -31,8 +31,13 @@ export function QrStreamReceiver({
     activeId,
     select,
     cycle,
+    rescan,
     switching,
     error: cameraError,
+    diagnostics,
+    zoom,
+    zoomValue,
+    setZoom,
   } = useCameraReader({
     onSymbol: add,
     ...(wasmUrl ? { wasmUrl } : {}),
@@ -103,6 +108,64 @@ export function QrStreamReceiver({
           </select>
         </label>
       ) : null}
+
+      {zoom ? (
+        <label>
+          Zoom: {zoomValue.toFixed(1)}
+          <input
+            type="range"
+            min={zoom.min}
+            max={zoom.max}
+            step={zoom.step}
+            value={zoomValue}
+            onChange={(event) => void setZoom(Number(event.target.value))}
+          />
+        </label>
+      ) : null}
+
+      <details style={{ fontSize: 12 }}>
+        <summary style={{ cursor: 'pointer' }}>
+          Cameras reported by this browser ({devices.length})
+        </summary>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', opacity: 0.7 }}>
+              <th>#</th>
+              <th>Label</th>
+              <th>Facing</th>
+              <th>Group</th>
+            </tr>
+          </thead>
+          <tbody>
+            {devices.map((device, index) => (
+              <tr key={device.deviceId} style={{ opacity: device.deviceId === activeId ? 1 : 0.6 }}>
+                <td>{device.deviceId === activeId ? '●' : index + 1}</td>
+                <td>{device.label}</td>
+                <td>{device.facing}</td>
+                <td>{device.groupId.slice(0, 6)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {diagnostics?.active ? (
+          <p style={{ opacity: 0.75 }}>
+            Active: {diagnostics.active.label || 'unnamed'} ·{' '}
+            {diagnostics.active.settings.width}×{diagnostics.active.settings.height} @{' '}
+            {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
+            {String(diagnostics.active.capabilities.focusMode ?? 'n/a')}
+          </p>
+        ) : null}
+
+        <button type="button" onClick={() => void rescan()} disabled={switching}>
+          {switching ? 'Scanning…' : 'Rescan cameras'}
+        </button>
+        <p style={{ opacity: 0.6, marginBottom: 0 }}>
+          Some Android builds only list secondary rear cameras after the stream has been opened
+          once. If your phone has more than the browser lists, that is a browser limit, not this
+          app.
+        </p>
+      </details>
 
       <div>
         <progress value={progress.solved} max={Math.max(1, progress.k)} style={{ width: '100%' }} />

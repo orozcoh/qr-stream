@@ -5,13 +5,13 @@
 
 ## Intent
 
-Move a JSON file (maximum 250 KB) between two devices with no network, pairing, NFC, or Bluetooth. One screen animates a sequence of QR codes; the other device's camera reads them. Delivered as a React library with a demo PWA, 100% static, installable, and usable fully offline.
+Move a JSON file (maximum 1 MiB) between two devices with no network, pairing, NFC, or Bluetooth. One screen animates a sequence of QR codes; the other device's camera reads them. Delivered as a React library with a demo PWA, 100% static, installable, and usable fully offline.
 
 Why QR: it is the only channel that crosses an airgap from a phone without a radio handshake, and it works on two locked-down devices where neither side can request network permission.
 
 ## Goals
 
-- Reliable one-way transfer of a JSON file up to 250 KB.
+- Reliable one-way transfer of a JSON file up to 1 MiB.
 - Correctness proven by hash, not by hope.
 - Optional encryption whose key never touches the screen.
 - Separable pieces: a DOM-free codec, a browser renderer/reader, and React bindings that other projects can reuse.
@@ -39,7 +39,8 @@ Why QR: it is the only channel that crosses an airgap from a phone without a rad
 - `getUserMedia` requires a secure context (HTTPS or localhost).
 - Phone screens are ~390 pt wide; a version-40 QR is 177 modules across.
 - Display refresh is 60 Hz; a code updated mid-refresh is unreadable.
-- 250 KB at ~15 KB/s is about 17 seconds best case.
+- 1 MiB of incompressible data is roughly two minutes of scanning at best;
+  1 MiB of JSON compresses 3-8x and finishes in well under a minute.
 - Static hosting only; no backend.
 
 ## Approaches considered
@@ -56,7 +57,7 @@ Why QR: it is the only channel that crosses an airgap from a phone without a rad
 |---|---|---|
 | Reliability model | Systematic Luby-Transform fountain code | user |
 | Key | Passphrase spoken aloud, typed on both devices, optional (blank = none) | user |
-| Payload | JSON only, 250 KB cap | user |
+| Payload | JSON only, 1 MiB cap | user |
 | Resume across reload | No — a human restarts | user |
 | Codec | Hand-written; only QR encode/decode bought | user |
 | UI layer | React components + hooks | user |

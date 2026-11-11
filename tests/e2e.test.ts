@@ -96,4 +96,33 @@ describe('core end to end', () => {
     expect(result?.data.length).toBe(payload.length);
     expect(Array.from(result?.data.slice(0, 8) ?? [])).toEqual(Array.from(payload.slice(0, 8)));
   }, 30_000);
+
+  test('a 1 MiB payload is accepted and completes with 30% loss', async () => {
+    const payload = new Uint8Array(1024 * 1024);
+    const rand = lcg(99);
+    for (let i = 0; i < payload.length; i += 1) payload[i] = Math.floor(rand() * 256);
+
+    const writer = await createQrStreamWriter(payload, { filename: 'big.json', preset: 'extreme' });
+    expect(writer.k).toBeGreaterThan(300);
+
+    const reader = createQrStreamReader();
+    const drop = lcg(7);
+    const started = performance.now();
+    let emitted = 0;
+
+    for await (const packet of writer.packets()) {
+      emitted += 1;
+      if (drop() >= 0.3) reader.add(packet);
+      if (reader.progress().solved === writer.k) break;
+      if (emitted > writer.k * 20) break;
+    }
+
+    const elapsed = performance.now() - started;
+    const result = await reader.result();
+    expect(result?.data.length).toBe(payload.length);
+    expect(Array.from(result?.data.slice(0, 16) ?? [])).toEqual(Array.from(payload.slice(0, 16)));
+    // Wall clock for encode + collect + solve at K ~ 358. Guards against the
+    // GF(2) elimination becoming the bottleneck at larger block counts.
+    expect(elapsed).toBeLessThan(60_000);
+  }, 120_000);
 });
