@@ -120,6 +120,10 @@ describe('matchesAccept', () => {
     expect(matchesAccept(fakeFile('photo', 'image/png'), 'image/*')).toBe(true);
     expect(matchesAccept(fakeFile('doc', 'application/pdf'), 'image/*')).toBe(false);
   });
+
+  test('matches everything for */*', () => {
+    expect(matchesAccept(fakeFile('blob', 'application/octet-stream'), '*/*')).toBe(true);
+  });
 });
 
 describe('describeAccept', () => {

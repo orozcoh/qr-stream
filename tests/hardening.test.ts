@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { encodePacket, type Packet } from '../src/core/packet';
-import { createQrStreamReader } from '../src/core/reader';
+import { MAX_SOURCE_BLOCKS, createQrStreamReader } from '../src/core/reader';
 import { createQrStreamWriter } from '../src/core/writer';
 
 const valid: Packet = {
@@ -51,8 +51,71 @@ describe('reader hardening', () => {
 
   test('a hostile stream is rejected before it can be trusted', () => {
     const reader = createQrStreamReader();
-    expect(reader.add(encodePacket({ ...valid, k: 0xffff, blockSize: 2953 }))).toBe('invalid');
+    // Use a full-size payload so the rejection comes from the K bound, not from
+    // the payload-length check.
+    expect(reader.add(encodePacket({ ...valid, k: 0xffff, blockSize: 2933, payload: new Uint8Array(2933) }))).toBe(
+      'invalid',
+    );
     expect(reader.sessionId()).toBeNull();
+  });
+
+  test('rejects K above the largest legal 1 MiB stream', () => {
+    const reader = createQrStreamReader();
+    expect(
+      reader.add(
+        encodePacket({ ...valid, k: MAX_SOURCE_BLOCKS + 1, blockSize: 32, payload: new Uint8Array(32) }),
+      ),
+    ).toBe('invalid');
+    expect(reader.sessionId()).toBeNull();
+  });
+
+  test('rejects a blockSize above the writer frame payload', () => {
+    const reader = createQrStreamReader();
+    expect(
+      reader.add(encodePacket({ ...valid, blockSize: 2934, payload: new Uint8Array(2934) })),
+    ).toBe('invalid');
+    expect(reader.sessionId()).toBeNull();
+  });
+
+  test('rejects K * blockSize above the 1 MiB stream budget', () => {
+    const reader = createQrStreamReader();
+    expect(
+      reader.add(encodePacket({ ...valid, k: 1252, blockSize: 2933, payload: new Uint8Array(2933) })),
+    ).toBe('invalid');
+    expect(reader.sessionId()).toBeNull();
+  });
+
+  test('a same-session K mismatch is invalid and does not burn the symbol index', () => {
+    const reader = createQrStreamReader();
+    expect(reader.add(encodePacket(valid))).toBe('accepted');
+    expect(reader.add(encodePacket({ ...valid, symbolIdx: 1, k: 5 }))).toBe('invalid');
+    // The genuine frame for the same symbol must still be accepted.
+    expect(reader.add(encodePacket({ ...valid, symbolIdx: 1 }))).toBe('accepted');
+    expect(reader.progress().solved).toBe(2);
+  });
+
+  test('a same-session flags mismatch is invalid', () => {
+    const reader = createQrStreamReader();
+    expect(reader.add(encodePacket(valid))).toBe('accepted');
+    expect(reader.add(encodePacket({ ...valid, symbolIdx: 1, flags: 3 }))).toBe('invalid');
+  });
+
+  test('frames after completion are duplicates, not new work', async () => {
+    const writer = await createQrStreamWriter(new Uint8Array(400), {
+      filename: 'x.json',
+      preset: 'fast',
+      sessionId: 9,
+    });
+    const packets: Uint8Array[] = [];
+    for await (const packet of writer.packets()) {
+      packets.push(packet);
+      if (packets.length === writer.k + 1) break;
+    }
+
+    const reader = createQrStreamReader();
+    for (const packet of packets.slice(0, writer.k)) reader.add(packet);
+    expect(reader.progress().solved).toBe(writer.k);
+    expect(reader.add(packets[writer.k] as Uint8Array)).toBe('duplicate');
   });
 });
 

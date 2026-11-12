@@ -22,14 +22,14 @@ export function useQrStreamWriter(options: UseQrStreamWriterOptions): UseQrStrea
   const { data, filename, preset, passphrase } = options;
 
   useEffect(() => {
-    if (data === null) {
-      setWriter(null);
-      setError(null);
-      return;
-    }
+    // A settings change invalidates the previous writer immediately. Keeping it
+    // visible while the new one is built can paint cleartext frames after a
+    // passphrase was typed, or pair an old blockSize with a new preset.
+    setWriter(null);
+    setError(null);
+    if (data === null) return;
 
     let cancelled = false;
-    setError(null);
 
     createQrStreamWriter(data, {
       filename,

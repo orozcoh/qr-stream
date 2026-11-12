@@ -51,7 +51,10 @@ export function QrStreamSender({
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const limit = Math.min(maxBytes ?? MAX_INPUT_BYTES, MAX_INPUT_BYTES);
+  const limit =
+    typeof maxBytes === 'number' && Number.isFinite(maxBytes) && maxBytes > 0
+      ? Math.min(maxBytes, MAX_INPUT_BYTES)
+      : MAX_INPUT_BYTES;
 
   const { writer, error } = useQrStreamWriter({
     data,
@@ -91,8 +94,20 @@ export function QrStreamSender({
   // passphrase was typed, so a settings change restarts the stream.
   useEffect(() => {
     if (!runningRef.current) return;
+
+    // The rebuilt writer is not ready yet. Stop the old stream now; the effect
+    // runs again when the new writer resolves.
+    if (writer === null) {
+      controllerRef.current?.stop();
+      controllerRef.current = null;
+      runningRef.current = false;
+      setRunning(false);
+      onRunningChange?.(false);
+      return;
+    }
+
     start();
-  }, [writer, start]);
+  }, [writer, start, onRunningChange]);
 
   useEffect(() => {
     controllerRef.current?.setFps(fps);

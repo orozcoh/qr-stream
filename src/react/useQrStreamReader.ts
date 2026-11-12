@@ -38,6 +38,8 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
   const finishingRef = useRef(false);
   const failedHardRef = useRef(false);
   const staleRef = useRef(0);
+  const epochRef = useRef(0);
+  const finishedRef = useRef(false);
 
   const [progress, setProgress] = useState({ solved: 0, k: 0 });
   const [solveRate, setSolveRate] = useState(0);
@@ -51,13 +53,18 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
     // start several 600k-iteration PBKDF2 jobs.
     if (finishingRef.current || failedHardRef.current) return;
     finishingRef.current = true;
+    const myEpoch = epochRef.current;
     try {
       const assembled = await readerRef.current.result(passphrase);
+      // A reset or a second session while the derivation was in flight must not
+      // deliver the abandoned transfer.
+      if (epochRef.current !== myEpoch) return;
       if (assembled === null) return;
       setResult(assembled);
       setWrongKey(false);
       setError(null);
     } catch (cause) {
+      if (epochRef.current !== myEpoch) return;
       if (cause instanceof WrongKeyError) {
         setWrongKey(true);
         setError('That passphrase does not match. Try again — no need to rescan.');
@@ -95,7 +102,13 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
       setProgress(next);
       setSolveRate(stamps.length);
 
-      if (next.k > 0 && next.solved === next.k) void finish(options.passphrase);
+      if (next.k > 0 && next.solved === next.k && !finishedRef.current) {
+        // Completion is a one-shot event. Further frames are still accepted by
+        // the core reader as duplicates, but they must not re-run PBKDF2 or
+        // re-fire the host callback.
+        finishedRef.current = true;
+        void finish(options.passphrase);
+      }
     },
     [finish, options.passphrase],
   );
@@ -114,6 +127,8 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
     finishingRef.current = false;
     failedHardRef.current = false;
     staleRef.current = 0;
+    epochRef.current += 1;
+    finishedRef.current = false;
     setProgress({ solved: 0, k: 0 });
     setSolveRate(0);
     setResult(null);

@@ -7,8 +7,8 @@ export class WrongKeyError extends Error {
 }
 
 export const DEFAULT_ITERATIONS = 600_000;
-const SALT_BYTES = 16;
-const NONCE_BYTES = 12;
+export const SALT_BYTES = 16;
+export const NONCE_BYTES = 12;
 
 /** Spoken passphrases arrive with stray whitespace and inconsistent Unicode forms. */
 function normalize(passphrase: string): string {
@@ -32,6 +32,15 @@ async function deriveKey(passphrase: string, salt: Uint8Array, iterations: numbe
   );
 }
 
+export interface EncryptOptions {
+  /** Reuse a salt generated before the metadata block was built. */
+  salt?: Uint8Array;
+  /** Reuse a nonce generated before the metadata block was built. */
+  nonce?: Uint8Array;
+  /** Metadata bytes that must be authenticated with the ciphertext. */
+  additionalData?: Uint8Array;
+}
+
 /**
  * Encrypt the whole compressed payload, once.
  *
@@ -43,13 +52,17 @@ export async function encryptBytes(
   plain: Uint8Array,
   passphrase: string,
   iterations = DEFAULT_ITERATIONS,
+  options: EncryptOptions = {},
 ): Promise<{ ciphertext: Uint8Array; salt: Uint8Array; nonce: Uint8Array; iterations: number }> {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
+  const salt = options.salt ?? crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const nonce = options.nonce ?? crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
   const key = await deriveKey(passphrase, salt, iterations);
-  const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce as BufferSource }, key, plain as BufferSource),
-  );
+  const params: AesGcmParams = {
+    name: 'AES-GCM',
+    iv: nonce as BufferSource,
+    ...(options.additionalData ? { additionalData: options.additionalData as BufferSource } : {}),
+  };
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(params, key, plain as BufferSource));
   return { ciphertext, salt, nonce, iterations };
 }
 
@@ -59,14 +72,19 @@ export async function decryptBytes(
   salt: Uint8Array,
   nonce: Uint8Array,
   iterations: number,
+  additionalData?: Uint8Array,
 ): Promise<Uint8Array> {
-  const key = await deriveKey(passphrase, salt, iterations);
+  if (salt.length !== SALT_BYTES || nonce.length !== NONCE_BYTES || iterations < 1) {
+    throw new WrongKeyError();
+  }
   try {
-    const plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: nonce as BufferSource },
-      key,
-      ciphertext as BufferSource,
-    );
+    const key = await deriveKey(passphrase, salt, iterations);
+    const params: AesGcmParams = {
+      name: 'AES-GCM',
+      iv: nonce as BufferSource,
+      ...(additionalData ? { additionalData: additionalData as BufferSource } : {}),
+    };
+    const plain = await crypto.subtle.decrypt(params, key, ciphertext as BufferSource);
     return new Uint8Array(plain);
   } catch {
     throw new WrongKeyError();

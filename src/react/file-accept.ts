@@ -18,6 +18,7 @@ export function matchesAccept(file: File, accept: string | undefined): boolean {
   const type = file.type.toLowerCase();
 
   return rules.some((rule) => {
+    if (rule === '*/*') return true;
     if (rule.startsWith('.')) return name.endsWith(rule);
     if (rule.endsWith('/*')) return type.startsWith(rule.slice(0, -1));
     return type === rule;

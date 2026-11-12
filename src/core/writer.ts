@@ -1,7 +1,7 @@
 import { gzipIfSmaller } from './compress';
-import { encryptBytes } from './crypto';
+import { DEFAULT_ITERATIONS, NONCE_BYTES, SALT_BYTES, encryptBytes } from './crypto';
 import { encodeSymbol } from './fountain';
-import { encodeMeta, writeVarint, type StreamMeta } from './meta';
+import { encodeMeta, sanitizeFilename, writeVarint, type StreamMeta } from './meta';
 import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet';
 import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS, type PresetName } from './types';
 import { qrCapacity } from './capacity';
@@ -48,21 +48,32 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
   // encryption with an empty key, showing a filled password field while anyone
   // can decrypt with "".
   const passphrase = options.passphrase?.normalize('NFKC').trim() ?? '';
-  const encrypted = passphrase.length > 0 ? await encryptBytes(compressed.data, passphrase) : null;
+  const hasKey = passphrase.length > 0;
 
-  const salt = encrypted?.salt;
-  const nonce = encrypted?.nonce;
+  // Generate the salt and nonce before the metadata block so the exact encoded
+  // metadata can be passed as AES-GCM additional authenticated data.
+  const salt = hasKey ? crypto.getRandomValues(new Uint8Array(SALT_BYTES)) : undefined;
+  const nonce = hasKey ? crypto.getRandomValues(new Uint8Array(NONCE_BYTES)) : undefined;
+
   const meta: StreamMeta = {
-    filename: options.filename,
+    filename: sanitizeFilename(options.filename),
     plainLen: data.length,
     wireLen: compressed.data.length,
     sha256: digest,
-    iterations: encrypted?.iterations ?? 0,
+    iterations: hasKey ? DEFAULT_ITERATIONS : 0,
     ...(salt ? { salt } : {}),
     ...(nonce ? { nonce } : {}),
   };
 
   const metaBytes = encodeMeta(meta);
+  const encrypted = hasKey
+    ? await encryptBytes(compressed.data, passphrase, DEFAULT_ITERATIONS, {
+        salt,
+        nonce,
+        additionalData: metaBytes,
+      })
+    : null;
+
   const metaLength = writeVarint(metaBytes.length);
   const wireBytes = encrypted?.ciphertext ?? compressed.data;
 

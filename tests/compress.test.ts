@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
 import { gunzip, gzipIfSmaller } from '../src/core/compress';
 
@@ -30,5 +31,18 @@ describe('gzipIfSmaller', () => {
 
   test('gunzip rejects data that is not gzip', async () => {
     await expect(gunzip(utf8('not gzip at all'))).rejects.toBeTruthy();
+  });
+
+  test('aborts a decompression bomb at the output budget', async () => {
+    const zeros = new Uint8Array(2 * 1024 * 1024);
+    const bomb = new Uint8Array(gzipSync(zeros));
+    await expect(gunzip(bomb, 1024 * 1024)).rejects.toBeInstanceOf(RangeError);
+  });
+
+  test('accepts a member exactly at the output budget', async () => {
+    const zeros = new Uint8Array(1024 * 1024);
+    const member = new Uint8Array(gzipSync(zeros));
+    const out = await gunzip(member, 1024 * 1024);
+    expect(out.length).toBe(zeros.length);
   });
 });

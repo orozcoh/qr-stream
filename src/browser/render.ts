@@ -105,33 +105,38 @@ export function renderQrStream(options: RenderOptions): RenderController {
     const packet = queue.shift();
     if (packet === undefined) return;
 
-    const matrix = packetToMatrix(packet, version);
-    const image = matrixToRGBA(matrix, 1);
-    source.width = image.width;
-    source.height = image.height;
-    sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
+    try {
+      const matrix = packetToMatrix(packet, version);
+      const image = matrixToRGBA(matrix, 1);
+      source.width = image.width;
+      source.height = image.height;
+      sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
 
-    const ratio = window.devicePixelRatio || 1;
-    // Measure the container, never the canvas: the canvas is sized to an exact
-    // integer multiple of the module grid, so its own CSS width is what we are
-    // about to change. Measuring it would feed the previous size back in.
-    const container = canvas.parentElement;
-    const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
-    const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
-    const scale = Math.max(1, Math.floor(targetWidth / image.width));
-    const size = image.width * scale;
+      const ratio = window.devicePixelRatio || 1;
+      // Measure the container, never the canvas: the canvas is sized to an exact
+      // integer multiple of the module grid, so its own CSS width is what we are
+      // about to change. Measuring it would feed the previous size back in.
+      const container = canvas.parentElement;
+      const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
+      const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
+      const scale = Math.max(1, Math.floor(targetWidth / image.width));
+      const size = image.width * scale;
 
-    if (canvas.width !== size || canvas.height !== size) {
-      canvas.width = size;
-      canvas.height = size;
+      if (canvas.width !== size || canvas.height !== size) {
+        canvas.width = size;
+        canvas.height = size;
+      }
+
+      context.imageSmoothingEnabled = false;
+      context.clearRect(0, 0, size, size);
+      context.drawImage(source, 0, 0, size, size);
+
+      painted += 1;
+    } finally {
+      // Refill even when this packet threw. Otherwise three bad packets drain
+      // the queue and the loop paints nothing forever while `running` is true.
+      void prepare();
     }
-
-    context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, size, size);
-    context.drawImage(source, 0, 0, size, size);
-
-    painted += 1;
-    void prepare();
   };
 
   const tick = (time: number): void => {

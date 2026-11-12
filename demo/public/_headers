@@ -5,6 +5,8 @@
   Referrer-Policy: no-referrer
   X-Frame-Options: DENY
   Permissions-Policy: camera=(self)
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
 
 # Vite fingerprints everything under /assets (index-f6qBg2v8.js,
 # zxing_reader-BCjuyud6.wasm), so those can be cached forever. Everything at

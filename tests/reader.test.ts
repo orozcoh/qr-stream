@@ -110,4 +110,55 @@ describe('createQrStreamReader', () => {
     for (const p of packets.slice(1)) reader.add(p);
     await expect(reader.result()).rejects.toBeTruthy();
   });
+
+  test('tampering with an encrypted filename fails authentication', async () => {
+    const writer = await createQrStreamWriter(json, {
+      filename: 'secret.json',
+      preset: 'fast',
+      passphrase: 'blue seven kilo',
+      sessionId: 12,
+    });
+    const packets = await collect(writer, writer.k);
+    const head = decodePacket(packets[0] as Uint8Array);
+    if (head === null) throw new Error('expected a valid first packet');
+
+    // The body is varint(metaLen) || meta || wire; the metadata is a one-byte
+    // version, a one-byte filename length, then the filename.
+    const payload = new Uint8Array(head.payload);
+    payload[3] = (payload[3] ?? 0) ^ 0x01;
+
+    const reader = createQrStreamReader();
+    reader.add(encodePacket({ ...head, payload }));
+    for (const p of packets.slice(1)) reader.add(p);
+    await expect(reader.result('blue seven kilo')).rejects.toBeInstanceOf(WrongKeyError);
+  });
+
+  test('a second result() returns the same reference and post-completion frames are duplicates', async () => {
+    const writer = await createQrStreamWriter(json, { filename: 'a.json', preset: 'fast', sessionId: 21 });
+    const packets = await collect(writer, writer.k + 1);
+    const reader = createQrStreamReader();
+    for (const p of packets.slice(0, writer.k)) reader.add(p);
+
+    const first = await reader.result();
+    const second = await reader.result();
+    expect(first).not.toBeNull();
+    expect(second?.data).toBe(first?.data);
+    expect(reader.add(packets[writer.k] as Uint8Array)).toBe('duplicate');
+  });
+
+  test('reset while a result is in flight discards the stale result', async () => {
+    const writer = await createQrStreamWriter(json, {
+      filename: 'secret.json',
+      preset: 'fast',
+      passphrase: 'blue seven kilo',
+      sessionId: 22,
+    });
+    const packets = await collect(writer, writer.k);
+    const reader = createQrStreamReader();
+    for (const p of packets) reader.add(p);
+
+    const pending = reader.result('blue seven kilo');
+    reader.reset();
+    await expect(pending).resolves.toBeNull();
+  });
 });

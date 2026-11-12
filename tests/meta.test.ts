@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { decodeMeta, encodeMeta, type StreamMeta } from '../src/core/meta';
+import { decodeMeta, encodeMeta, readVarint, sanitizeFilename, type StreamMeta } from '../src/core/meta';
 
 const base: StreamMeta = {
   filename: 'report.json',
@@ -60,5 +60,22 @@ describe('metadata block', () => {
     const bytes = encodeMeta(base);
     bytes[0] = 9;
     expect(() => decodeMeta(bytes)).toThrow();
+  });
+
+  test('strips bidi controls and path separators from a filename', () => {
+    const decoded = decodeMeta(encodeMeta({ ...base, filename: '..\\evil\u202e.json' }));
+    expect(decoded.filename).toBe('..evil.json');
+    expect(sanitizeFilename('\u0000')).toBe('payload');
+  });
+
+  test('rejects a non-canonical varint', () => {
+    expect(() => readVarint(Uint8Array.from([0x80, 0x00]), 0)).toThrow();
+  });
+
+  test('rejects trailing bytes after the metadata block', () => {
+    const bytes = encodeMeta(base);
+    const extended = new Uint8Array(bytes.length + 1);
+    extended.set(bytes);
+    expect(() => decodeMeta(extended)).toThrow();
   });
 });
