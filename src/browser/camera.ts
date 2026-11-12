@@ -237,6 +237,21 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     await openPreferred();
     if (options.deviceId) await select(options.deviceId);
   } catch (error) {
+    // getUserMedia may have resolved before a later setup step threw. Release
+    // anything acquired so an unmount or a rejected setup cannot leave the
+    // camera live with no controller to stop it.
+    const currentStream = stream as MediaStream | null;
+    for (const track of currentStream?.getTracks() ?? []) track.stop();
+    stream = null;
+    if (video) video.srcObject = null;
+    if (!disposed) {
+      disposed = true;
+      try {
+        await options.decode.dispose?.();
+      } catch {
+        // A decoder teardown failure must not mask the original error.
+      }
+    }
     report(
       error instanceof DOMException && error.name === 'NotAllowedError'
         ? 'Camera permission denied. Allow camera access and reload.'

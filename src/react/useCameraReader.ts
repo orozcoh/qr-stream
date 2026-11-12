@@ -72,11 +72,19 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
     let cancelled = false;
 
     const start = async (): Promise<void> => {
-      if (!videoRef.current) return;
+      const video = videoRef.current;
+      if (!video) return;
       try {
         const decode = await options.createDecoder();
+        // The modal can unmount while the decoder loads. React detaches the ref
+        // before the passive cleanup, so check both the captured element and its
+        // document attachment before opening the camera.
+        if (cancelled || !video.isConnected) {
+          await decode.dispose?.();
+          return;
+        }
         const controller = await readQrStream({
-          video: videoRef.current,
+          video,
           decode,
           ...(options.deviceId ? { deviceId: options.deviceId } : {}),
         });

@@ -89,4 +89,45 @@ describe('camera lifecycle', () => {
     expect(video.srcObject).toBeNull();
     expect(dispose).toHaveBeenCalledTimes(1);
   });
+
+  test('releases the stream when setup fails after acquisition', async () => {
+    const context = {
+      drawImage: () => undefined,
+      getImageData: () => ({ data: new Uint8ClampedArray(0), width: 0, height: 0 }),
+    };
+    const canvas = { width: 0, height: 0, getContext: () => context };
+
+    vi.stubGlobal('document', { createElement: () => canvas });
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+
+    const firstStop = vi.fn();
+    const secondStop = vi.fn();
+    const first = fakeStream(fakeTrack('cam-1', firstStop));
+    const second = fakeStream(fakeTrack('cam-2', secondStop));
+    let calls = 0;
+
+    const mediaDevices = {
+      getUserMedia: vi.fn(async () => {
+        calls += 1;
+        return calls === 1 ? first : second;
+      }),
+      enumerateDevices: vi.fn(async () => []),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('navigator', { mediaDevices });
+
+    const dispose = vi.fn();
+    await expect(
+      readQrStream({
+        video: null as unknown as HTMLVideoElement,
+        decode: { decode: async () => null, dispose },
+      }),
+    ).rejects.toBeTruthy();
+
+    expect(calls).toBe(2);
+    expect(secondStop).toHaveBeenCalled();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
 });

@@ -259,13 +259,17 @@ independent installs and two independent caches of the same app.
    - Zone → **Workers Routes: Edit**
    - Zone → **DNS: Edit** (the custom-domain attach writes DNS and a certificate)
 
-   Add it as the repo secret `CLOUDFLARE_API_TOKEN`, and your account id as
-   `CLOUDFLARE_ACCOUNT_ID`.
+   Store the token and account id as **`production` environment secrets**
+   (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), not repository secrets.
+   Repository/org secrets are readable by same-repo PR workflows, including a
+   PR-edited `verify.yml`; `environment: production` does not scope a repository
+   secret. In the repository settings, create the `production` environment and
+   restrict it to `main` (and no attacker-controlled tags).
 
    If you would rather not give CI DNS rights, attach the domain once in the
    dashboard (*Settings → Domains & Routes → Add → Custom Domain*) and delete
    the `routes` entry from `wrangler.jsonc`; then `Workers Scripts: Edit` alone
-   is enough.
+   is enough. That also removes the zone DNS write from the credential.
 
 ### Continuous deployment
 
@@ -275,10 +279,11 @@ Verification and deployment are separate workflows:
   credentials: install, typecheck, test, build the library, build the demo.
 - **`.github/workflows/deploy.yml`** runs on pushes to `main` and manual
   dispatch: the same verification, then `pnpm exec wrangler deploy` using the
-  lockfile-pinned Wrangler. The job declares the `production` environment; in
-  the repository settings that environment must be restricted to `main`.
-  That rule, not the workflow text, is what keeps a branch-pushed copy of the
-  file from reading the Cloudflare secrets. Manual dispatch is main-gated.
+  lockfile-pinned Wrangler. The job declares the `production` environment;
+  store the Cloudflare credentials as environment secrets and restrict that
+  environment to `main`. The environment rule, not the workflow text, is what
+  keeps a branch-pushed copy of the file from reading the credentials. Manual
+  dispatch is main-gated.
 
 The deploy job fails if the live site is missing
 `Permissions-Policy: camera=(self)`, `Content-Security-Policy`, or

@@ -42,6 +42,8 @@ export function QrStreamSender({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<RenderController | null>(null);
   const runningRef = useRef(false);
+  const onRunningChangeRef = useRef(onRunningChange);
+  onRunningChangeRef.current = onRunningChange;
 
   const [data, setData] = useState<Uint8Array | null>(null);
   const [filename, setFilename] = useState('payload');
@@ -56,7 +58,7 @@ export function QrStreamSender({
       ? Math.min(maxBytes, MAX_INPUT_BYTES)
       : MAX_INPUT_BYTES;
 
-  const { writer, error } = useQrStreamWriter({
+  const { writer, error, pending } = useQrStreamWriter({
     data,
     filename,
     preset,
@@ -68,8 +70,8 @@ export function QrStreamSender({
     controllerRef.current = null;
     runningRef.current = false;
     setRunning(false);
-    onRunningChange?.(false);
-  }, [onRunningChange]);
+    onRunningChangeRef.current?.(false);
+  }, []);
 
   const start = useCallback(() => {
     if (!writer || !canvasRef.current) return;
@@ -84,8 +86,8 @@ export function QrStreamSender({
     controllerRef.current.play();
     runningRef.current = true;
     setRunning(true);
-    onRunningChange?.(true);
-  }, [fps, onRunningChange, preset, writer]);
+    onRunningChangeRef.current?.(true);
+  }, [fps, preset, writer]);
 
   useEffect(() => stop, [stop]);
 
@@ -102,12 +104,12 @@ export function QrStreamSender({
       controllerRef.current = null;
       runningRef.current = false;
       setRunning(false);
-      onRunningChange?.(false);
+      onRunningChangeRef.current?.(false);
       return;
     }
 
     start();
-  }, [writer, start, onRunningChange]);
+  }, [writer, start]);
 
   useEffect(() => {
     controllerRef.current?.setFps(fps);
@@ -169,7 +171,7 @@ export function QrStreamSender({
         onClick={running ? stop : start}
         disabled={writer === null}
       >
-        {running ? 'Stop stream' : 'Start stream'}
+        {running ? 'Stop stream' : pending ? 'Preparing…' : 'Start stream'}
       </button>
 
       {running ? (

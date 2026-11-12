@@ -79,13 +79,14 @@ export function renderQrStream(options: RenderOptions): RenderController {
   let lastTime = 0;
   const queue: Uint8Array[] = [];
   let exhausted = false;
+  let stopped = false;
   let preparing = false;
 
   const iterator = packets[Symbol.asyncIterator]();
 
   /** Top up to the cap. Never fetch a fixed batch, or the queue grows forever. */
   const prepare = async (): Promise<void> => {
-    if (preparing || exhausted) return;
+    if (stopped || preparing || exhausted) return;
     preparing = true;
     try {
       while (queue.length < QUEUE_CAP) {
@@ -96,12 +97,18 @@ export function renderQrStream(options: RenderOptions): RenderController {
         }
         queue.push(value as Uint8Array);
       }
+    } catch {
+      // A rejecting host iterator cannot be retried; stop the clock instead of
+      // producing an unhandled rejection at camera frame rate.
+      exhausted = true;
+      running = false;
     } finally {
       preparing = false;
     }
   };
 
   const paintNext = (): void => {
+    if (stopped) return;
     const packet = queue.shift();
     if (packet === undefined) return;
 
@@ -167,7 +174,7 @@ export function renderQrStream(options: RenderOptions): RenderController {
 
   return {
     play() {
-      if (running) return;
+      if (running || stopped) return;
       running = true;
       lastTime = 0;
       accumulator = 0;
@@ -182,10 +189,14 @@ export function renderQrStream(options: RenderOptions): RenderController {
       fps = quantizeFps(next, refreshHz);
     },
     stop() {
+      stopped = true;
       running = false;
       cancelAnimationFrame(frameHandle);
       queue.length = 0;
       void iterator.return?.(undefined);
+      // Remove the last painted QR. A stopped controller must not leave a
+      // scannable frame on screen, especially when K=1 carries the whole file.
+      context.clearRect(0, 0, canvas.width, canvas.height);
     },
     framesPainted: () => painted,
   };
