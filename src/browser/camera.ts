@@ -95,6 +95,8 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
   let tracks: CameraDevice[] = [];
   let active: string | null = null;
   let stopped = false;
+  let disposed = false;
+  let openGeneration = 0;
   let frameHandle = 0;
   let timerHandle: ReturnType<typeof setTimeout> | 0 = 0;
   let decoding = false;
@@ -114,9 +116,17 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
   };
 
   const open = async (constraints: MediaStreamConstraints): Promise<MediaStream> => {
+    openGeneration += 1;
+    const myGeneration = openGeneration;
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null;
     const next = await navigator.mediaDevices.getUserMedia(constraints);
+    // stop() or a newer open() may have won while getUserMedia was pending.
+    // Install nothing and release the tracks we just acquired.
+    if (stopped || myGeneration !== openGeneration) {
+      for (const track of next.getTracks()) track.stop();
+      throw new DOMException('Camera closed', 'AbortError');
+    }
     stream = next;
     video.srcObject = next;
     await video.play().catch(() => undefined);
@@ -217,6 +227,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     try {
       await open({ video: { deviceId: { exact: id } } });
     } catch {
+      if (stopped) return;
       report('That camera could not be opened. Falling back to the default camera.');
       await open({ video: { facingMode: { ideal: 'environment' } } });
     }
@@ -226,6 +237,21 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     await openPreferred();
     if (options.deviceId) await select(options.deviceId);
   } catch (error) {
+    // getUserMedia may have resolved before a later setup step threw. Release
+    // anything acquired so an unmount or a rejected setup cannot leave the
+    // camera live with no controller to stop it.
+    const currentStream = stream as MediaStream | null;
+    for (const track of currentStream?.getTracks() ?? []) track.stop();
+    stream = null;
+    if (video) video.srcObject = null;
+    if (!disposed) {
+      disposed = true;
+      try {
+        await options.decode.dispose?.();
+      } catch {
+        // A decoder teardown failure must not mask the original error.
+      }
+    }
     report(
       error instanceof DOMException && error.name === 'NotAllowedError'
         ? 'Camera permission denied. Allow camera access and reload.'
@@ -299,12 +325,21 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
     stop(): void {
       stopped = true;
+      openGeneration += 1;
       cancelAnimationFrame(frameHandle);
       if (timerHandle) clearTimeout(timerHandle);
       for (const track of stream?.getTracks() ?? []) track.stop();
       stream = null;
       video.srcObject = null;
       navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      if (!disposed) {
+        disposed = true;
+        try {
+          options.decode.dispose?.();
+        } catch {
+          // A decoder teardown failure must not keep the camera alive.
+        }
+      }
     },
 
     onSymbol(callback: (bytes: Uint8Array) => void): void {

@@ -15,8 +15,8 @@ denser code ever buys back.
 | 3 | 1 | `flags` | bits | bit0 `gzip`, bit1 `encrypted`. bits 2–7 reserved, must be 0. |
 | 4 | 4 | `sessionId` | u32 | Random per transfer. The reader locks to the first one it sees. |
 | 8 | 2 | `symbolIdx` | u16 | `< K` → source block, sent raw. `>= K` → repair symbol. |
-| 10 | 2 | `K` | u16 | Source block count. Constant for the session. |
-| 12 | 2 | `blockSize` | u16 | Bytes per block: `qrCapacity(version) − 20`. Constant for the session. |
+| 10 | 2 | `K` | u16 | Source block count. Constant for the session. The reader caps it at `MAX_SOURCE_BLOCKS` (1252, the largest a legal 1 MiB stream can produce) and rejects a later frame whose `K` disagrees with the first. |
+| 12 | 2 | `blockSize` | u16 | Bytes per block: `qrCapacity(version) − 20`. Constant for the session. The reader caps it at 2933 (the writer's maximum payload), not the raw QR capacity. |
 | 14 | 2 | `payloadLen` | u16 | Always equals `blockSize`. Source blocks are zero-padded, so every frame is the same size and every symbol is XOR-compatible. |
 | 16 | `blockSize` | `payload` | bytes | Block data, zero-padded to `blockSize`. |
 | 16+N | 4 | `crc32` | u32 | IEEE 802.3 over bytes `0 … 16+N−1`. |
@@ -28,6 +28,10 @@ simply a duplicate the reader ignores.
 A frame is rejected unless the magic matches, the total length is exactly
 `HEADER_SIZE + payloadLen + 4`, `payloadLen <= blockSize`, and the CRC matches.
 A rejected frame is an **erasure**, which the fountain code absorbs.
+
+The receiver additionally caps `K` at 1252, caps `blockSize` at 2933, and
+requires `K * blockSize` to fit the 1 MiB payload budget plus metadata. These
+are receiver-side sanity bounds; an honest writer never exceeds them.
 
 ## Metadata block
 
@@ -45,6 +49,13 @@ the filename after one or two symbols.
 | u16 + n | `salt` | PBKDF2 salt, 16 bytes. Length 0 when not encrypted. |
 | u16 + n | `nonce` | AES-GCM nonce, 12 bytes. Length 0 when not encrypted. |
 | u32 | `iterations` | PBKDF2 iterations (`600000`). Stored so old streams stay readable. |
+
+For encrypted streams the **exact encoded metadata block** (from `metaVersion`
+through `iterations`) is passed to AES-GCM as additional authenticated data.
+Tampering with `filename`, `plainLen`, `wireLen`, `sha256`, salt, or nonce
+therefore fails decryption instead of silently changing the displayed or saved
+name. `plainLen` is also compared with the decoded byte length after
+decompression.
 
 The assembled payload is:
 
@@ -112,7 +123,8 @@ trials.
 key = PBKDF2-SHA256(passphrase.normalize('NFKC').trim(), salt, 600000) → AES-256-GCM
 ```
 
-The whole compressed payload is encrypted once, never per block: a repair
-symbol is the XOR of several ciphertext blocks, so per-block nonces would make
+The metadata block is the GCM additional authenticated data. The whole
+compressed payload is encrypted once, never per block: a repair symbol is the
+XOR of several ciphertext blocks, so per-block nonces would make
 fountain decoding depend on decryption and deadlock. A GCM authentication
 failure is reported as a wrong key, distinct from corruption.

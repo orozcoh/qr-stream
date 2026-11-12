@@ -47,4 +47,35 @@ describe('encryption', () => {
     const b = await encryptBytes(plain, 'k', ITERATIONS);
     expect(Array.from(a.ciphertext)).not.toEqual(Array.from(b.ciphertext));
   });
+
+  test('additionalData is authenticated', async () => {
+    const aad = new TextEncoder().encode('metadata');
+    const sealed = await encryptBytes(new Uint8Array([1, 2, 3]), 'right', ITERATIONS, {
+      additionalData: aad,
+    });
+    const tampered = new TextEncoder().encode('metadatA');
+    await expect(
+      decryptBytes(sealed.ciphertext, 'right', sealed.salt, sealed.nonce, sealed.iterations, tampered),
+    ).rejects.toBeInstanceOf(WrongKeyError);
+
+    const opened = await decryptBytes(
+      sealed.ciphertext,
+      'right',
+      sealed.salt,
+      sealed.nonce,
+      sealed.iterations,
+      aad,
+    );
+    expect(Array.from(opened)).toEqual([1, 2, 3]);
+  });
+
+  test('rejects malformed salt or nonce lengths', async () => {
+    const sealed = await encryptBytes(new Uint8Array([1]), 'k', ITERATIONS);
+    await expect(
+      decryptBytes(sealed.ciphertext, 'k', new Uint8Array(15), sealed.nonce, sealed.iterations),
+    ).rejects.toBeInstanceOf(WrongKeyError);
+    await expect(
+      decryptBytes(sealed.ciphertext, 'k', sealed.salt, new Uint8Array(11), sealed.iterations),
+    ).rejects.toBeInstanceOf(WrongKeyError);
+  });
 });

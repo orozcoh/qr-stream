@@ -79,13 +79,14 @@ export function renderQrStream(options: RenderOptions): RenderController {
   let lastTime = 0;
   const queue: Uint8Array[] = [];
   let exhausted = false;
+  let stopped = false;
   let preparing = false;
 
   const iterator = packets[Symbol.asyncIterator]();
 
   /** Top up to the cap. Never fetch a fixed batch, or the queue grows forever. */
   const prepare = async (): Promise<void> => {
-    if (preparing || exhausted) return;
+    if (stopped || preparing || exhausted) return;
     preparing = true;
     try {
       while (queue.length < QUEUE_CAP) {
@@ -96,42 +97,53 @@ export function renderQrStream(options: RenderOptions): RenderController {
         }
         queue.push(value as Uint8Array);
       }
+    } catch {
+      // A rejecting host iterator cannot be retried; stop the clock instead of
+      // producing an unhandled rejection at camera frame rate.
+      exhausted = true;
+      running = false;
     } finally {
       preparing = false;
     }
   };
 
   const paintNext = (): void => {
+    if (stopped) return;
     const packet = queue.shift();
     if (packet === undefined) return;
 
-    const matrix = packetToMatrix(packet, version);
-    const image = matrixToRGBA(matrix, 1);
-    source.width = image.width;
-    source.height = image.height;
-    sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
+    try {
+      const matrix = packetToMatrix(packet, version);
+      const image = matrixToRGBA(matrix, 1);
+      source.width = image.width;
+      source.height = image.height;
+      sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
 
-    const ratio = window.devicePixelRatio || 1;
-    // Measure the container, never the canvas: the canvas is sized to an exact
-    // integer multiple of the module grid, so its own CSS width is what we are
-    // about to change. Measuring it would feed the previous size back in.
-    const container = canvas.parentElement;
-    const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
-    const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
-    const scale = Math.max(1, Math.floor(targetWidth / image.width));
-    const size = image.width * scale;
+      const ratio = window.devicePixelRatio || 1;
+      // Measure the container, never the canvas: the canvas is sized to an exact
+      // integer multiple of the module grid, so its own CSS width is what we are
+      // about to change. Measuring it would feed the previous size back in.
+      const container = canvas.parentElement;
+      const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
+      const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
+      const scale = Math.max(1, Math.floor(targetWidth / image.width));
+      const size = image.width * scale;
 
-    if (canvas.width !== size || canvas.height !== size) {
-      canvas.width = size;
-      canvas.height = size;
+      if (canvas.width !== size || canvas.height !== size) {
+        canvas.width = size;
+        canvas.height = size;
+      }
+
+      context.imageSmoothingEnabled = false;
+      context.clearRect(0, 0, size, size);
+      context.drawImage(source, 0, 0, size, size);
+
+      painted += 1;
+    } finally {
+      // Refill even when this packet threw. Otherwise three bad packets drain
+      // the queue and the loop paints nothing forever while `running` is true.
+      void prepare();
     }
-
-    context.imageSmoothingEnabled = false;
-    context.clearRect(0, 0, size, size);
-    context.drawImage(source, 0, 0, size, size);
-
-    painted += 1;
-    void prepare();
   };
 
   const tick = (time: number): void => {
@@ -162,7 +174,7 @@ export function renderQrStream(options: RenderOptions): RenderController {
 
   return {
     play() {
-      if (running) return;
+      if (running || stopped) return;
       running = true;
       lastTime = 0;
       accumulator = 0;
@@ -177,10 +189,14 @@ export function renderQrStream(options: RenderOptions): RenderController {
       fps = quantizeFps(next, refreshHz);
     },
     stop() {
+      stopped = true;
       running = false;
       cancelAnimationFrame(frameHandle);
       queue.length = 0;
       void iterator.return?.(undefined);
+      // Remove the last painted QR. A stopped controller must not leave a
+      // scannable frame on screen, especially when K=1 carries the whole file.
+      context.clearRect(0, 0, canvas.width, canvas.height);
     },
     framesPainted: () => painted,
   };

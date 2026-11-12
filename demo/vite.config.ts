@@ -42,7 +42,4 @@ export default defineConfig({
     outDir: here('./dist'),
     emptyOutDir: true,
   },
-  server: {
-    host: true,
-  },
 });

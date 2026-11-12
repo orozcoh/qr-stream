@@ -87,6 +87,8 @@ reader.sessionId();           // locks to the first stream it sees
 
 const result = await reader.result('optional passphrase');
 // null until complete, else { data: Uint8Array, meta: StreamMeta }
+// The verified result is memoized: repeated calls return the same array, so
+// treat it as read-only.
 // throws WrongKeyError for a bad passphrase — retry without rescanning
 ```
 
@@ -220,7 +222,7 @@ current browser. The React entry needs React 19. The decoder needs
 ## Testing
 
 ```bash
-pnpm test          # 115 tests, DOM-free
+pnpm test          # 153 tests, DOM-free
 pnpm typecheck
 pnpm build
 pnpm demo:build
@@ -239,7 +241,7 @@ serves the assets directly, so requests for the app cost nothing.
 ```bash
 pnpm demo:build          # -> demo/dist
 pnpm deploy:dry          # validate config + asset resolution, uploads nothing
-pnpm deploy              # npx wrangler deploy, needs credentials
+pnpm deploy              # local wrangler deploy, needs credentials
 ```
 
 `wrangler.jsonc` pins `workers_dev: false`, so the only origin is
@@ -257,21 +259,36 @@ independent installs and two independent caches of the same app.
    - Zone → **Workers Routes: Edit**
    - Zone → **DNS: Edit** (the custom-domain attach writes DNS and a certificate)
 
-   Add it as the repo secret `CLOUDFLARE_API_TOKEN`, and your account id as
-   `CLOUDFLARE_ACCOUNT_ID`.
+   Store the token and account id as **`production` environment secrets**
+   (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`), not repository secrets.
+   Repository/org secrets are readable by same-repo PR workflows, including a
+   PR-edited `verify.yml`; `environment: production` does not scope a repository
+   secret. In the repository settings, create the `production` environment and
+   restrict it to `main` (and no attacker-controlled tags).
 
    If you would rather not give CI DNS rights, attach the domain once in the
    dashboard (*Settings → Domains & Routes → Add → Custom Domain*) and delete
    the `routes` entry from `wrangler.jsonc`; then `Workers Scripts: Edit` alone
-   is enough.
+   is enough. That also removes the zone DNS write from the credential.
 
 ### Continuous deployment
 
-`.github/workflows/deploy.yml` runs on every push and pull request:
+Verification and deployment are separate workflows:
 
-- **PRs**: install, typecheck, test, build the library, build the demo. No credentials.
-- **`main`**: the same, then `wrangler deploy`. Manual dispatch deploys whichever
-  branch you pick to the same Worker.
+- **`.github/workflows/verify.yml`** runs on pull requests only, with no
+  credentials: install, typecheck, test, build the library, build the demo.
+- **`.github/workflows/deploy.yml`** runs on pushes to `main` and manual
+  dispatch: the same verification, then `pnpm exec wrangler deploy` using the
+  lockfile-pinned Wrangler. The job declares the `production` environment;
+  store the Cloudflare credentials as environment secrets and restrict that
+  environment to `main`. The environment rule, not the workflow text, is what
+  keeps a branch-pushed copy of the file from reading the credentials. Manual
+  dispatch is main-gated.
+
+The deploy job fails if the live site is missing
+`Permissions-Policy: camera=(self)`, `Content-Security-Policy`, or
+`Strict-Transport-Security`, or if the served `index.html` does not reference
+the asset hash that was just built.
 
 There are no preview deployments. A `wrangler versions upload` preview keeps
 every version in the account; each `deploy` instead replaces the last one, so

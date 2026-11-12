@@ -19,6 +19,18 @@ const META_VERSION = 1;
 const MAX_FILENAME_BYTES = 64;
 const SHA256_BYTES = 32;
 
+/**
+ * Control characters, bidi overrides, and path separators are not safe in a
+ * name that is rendered and offered as a download. Strip them rather than
+ * trusting the peer's filename verbatim.
+ */
+const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069/\\]/g;
+
+export function sanitizeFilename(name: string): string {
+  const cleaned = name.replace(UNSAFE_FILENAME_CHARS, '').trim();
+  return cleaned.length > 0 ? cleaned : 'payload';
+}
+
 /** Trim to a byte budget without cutting a multi-byte code point in half. */
 function truncateUtf8(text: string, maxBytes: number): Uint8Array {
   const full = new TextEncoder().encode(text);
@@ -48,6 +60,9 @@ export function readVarint(bytes: Uint8Array, offset: number): { value: number; 
   for (;;) {
     if (cursor >= bytes.length) throw new RangeError('truncated varint');
     const byte = bytes[cursor] as number;
+    // A zero final byte after a continuation is a non-canonical encoding of a
+    // smaller value. Rejecting it keeps every parser reading one shape.
+    if (cursor > offset && byte === 0) throw new RangeError('non-canonical varint');
     value += (byte & 0x7f) * shift;
     shift *= 128;
     cursor += 1;
@@ -58,7 +73,7 @@ export function readVarint(bytes: Uint8Array, offset: number): { value: number; 
 }
 
 export function encodeMeta(meta: StreamMeta): Uint8Array {
-  const filename = truncateUtf8(meta.filename, MAX_FILENAME_BYTES);
+  const filename = truncateUtf8(sanitizeFilename(meta.filename), MAX_FILENAME_BYTES);
   const salt = meta.salt ?? new Uint8Array(0);
   const nonce = meta.nonce ?? new Uint8Array(0);
 
@@ -115,7 +130,7 @@ export function decodeMeta(bytes: Uint8Array): StreamMeta {
   const filenameLen = bytes[offset] as number;
   offset += 1;
   need(filenameLen);
-  const filename = new TextDecoder().decode(bytes.subarray(offset, offset + filenameLen));
+  const filename = sanitizeFilename(new TextDecoder().decode(bytes.subarray(offset, offset + filenameLen)));
   offset += filenameLen;
 
   need(8);
@@ -144,6 +159,9 @@ export function decodeMeta(bytes: Uint8Array): StreamMeta {
 
   need(4);
   const iterations = view.getUint32(offset);
+  offset += 4;
+
+  if (offset !== bytes.length) throw new RangeError('trailing bytes in metadata block');
 
   return { filename, plainLen, wireLen, sha256, salt, nonce, iterations };
 }

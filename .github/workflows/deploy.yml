@@ -3,7 +3,6 @@ name: deploy
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
 
 # One deploy at a time per ref; a queued run supersedes the one before it.
@@ -17,16 +16,22 @@ env:
 jobs:
   verify-and-deploy:
     runs-on: ubuntu-latest
+    # The production environment must be restricted to the main branch in the
+    # repository settings. That rule, not the workflow text, is what keeps a
+    # branch-pushed copy of this file from reading the Cloudflare secrets.
+    environment: production
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -47,24 +52,32 @@ jobs:
         run: pnpm demo:build
 
       - name: Deploy to Cloudflare
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '4'
-          command: deploy
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Use the lockfile-pinned wrangler from devDependencies instead of the
+        # wrangler-action's floating `wranglerVersion` install.
+        run: pnpm exec wrangler deploy
 
       # Wrangler swallows custom-domain errors when it is not attached to a TTY,
       # so a missing permission or a DNS conflict can produce a green deploy of
       # an unreachable site. Assert the domain actually serves before calling
       # this a success.
       - name: Verify the deployment is live
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         run: |
+          check_200() {
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-redirs 0 "$1")
+            if [ "$code" != "200" ]; then
+              echo "::error::$1 returned $code"
+              return 1
+            fi
+          }
+
           live=0
           for attempt in $(seq 1 10); do
-            if curl -sfI "$SITE_URL/" > /dev/null; then
+            if check_200 "$SITE_URL/"; then
               live=1
               echo "$SITE_URL responded on attempt $attempt"
               break
@@ -79,13 +92,22 @@ jobs:
           fi
 
           for asset in sw.js manifest.webmanifest icon.svg; do
-            curl -sfI "$SITE_URL/$asset" > /dev/null \
+            check_200 "$SITE_URL/$asset" \
               || { echo "::error::$asset is not being served"; exit 1; }
             echo "$asset ok"
           done
 
-          # Without this header the page loads and the camera silently fails,
-          # which is the failure this whole app exists to avoid.
-          curl -sI "$SITE_URL/" | grep -qi '^permissions-policy:.*camera=(self)' \
+          headers=$(curl -sI --max-redirs 0 "$SITE_URL/")
+          echo "$headers" | grep -qi '^permissions-policy:.*camera=(self)' \
             || { echo "::error::permissions-policy camera=(self) is missing — demo/public/_headers did not reach the assets directory"; exit 1; }
-          echo "permissions-policy ok"
+          echo "$headers" | grep -qi '^content-security-policy:' \
+            || { echo "::error::content-security-policy is missing"; exit 1; }
+          echo "$headers" | grep -qi '^strict-transport-security:' \
+            || { echo "::error::strict-transport-security is missing"; exit 1; }
+
+          asset=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' demo/dist/index.html | head -1)
+          if [ -n "$asset" ]; then
+            curl -sf --max-redirs 0 "$SITE_URL/" | grep -q "$asset" \
+              || { echo "::error::live index.html does not reference the built asset $asset"; exit 1; }
+            echo "bundle $asset ok"
+          fi

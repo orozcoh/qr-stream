@@ -33,12 +33,19 @@ interface Equation {
 
 const bit = (index: number): bigint => 1n << BigInt(index);
 
+const POPCOUNT_NIBBLE = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4] as const;
+
 function popcount(mask: bigint): number {
-  let rest = mask;
+  if (mask === 0n) return 0;
+  // One hex conversion plus a nibble table is O(k/4) characters. Clearing one
+  // bigint bit at a time is O(k^2/64) word operations for a dense mask, which is
+  // the difference between a frame costing microseconds and hundreds of ms.
+  const hex = mask.toString(16);
   let count = 0;
-  while (rest !== 0n) {
-    rest &= rest - 1n;
-    count += 1;
+  for (let i = 0; i < hex.length; i += 1) {
+    const code = hex.charCodeAt(i);
+    const nibble = code <= 57 ? code - 48 : code - 87;
+    count += POPCOUNT_NIBBLE[nibble] as number;
   }
   return count;
 }
@@ -86,9 +93,12 @@ export class FountainDecoder {
   }
 
   add(symbolIdx: number, payload: Uint8Array): void {
+    if (this.isComplete) return;
     if (this.seen.has(symbolIdx)) return;
-    this.seen.add(symbolIdx);
+    // Check the length before recording the index. A wrong-length payload must
+    // not burn the symbol index and make a later genuine copy look duplicate.
     if (payload.length !== this.blockSize) return;
+    this.seen.add(symbolIdx);
 
     let mask = 0n;
     const data = payload.slice();

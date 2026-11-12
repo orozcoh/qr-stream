@@ -42,6 +42,8 @@ export function QrStreamSender({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<RenderController | null>(null);
   const runningRef = useRef(false);
+  const onRunningChangeRef = useRef(onRunningChange);
+  onRunningChangeRef.current = onRunningChange;
 
   const [data, setData] = useState<Uint8Array | null>(null);
   const [filename, setFilename] = useState('payload');
@@ -51,9 +53,12 @@ export function QrStreamSender({
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const limit = Math.min(maxBytes ?? MAX_INPUT_BYTES, MAX_INPUT_BYTES);
+  const limit =
+    typeof maxBytes === 'number' && Number.isFinite(maxBytes) && maxBytes > 0
+      ? Math.min(maxBytes, MAX_INPUT_BYTES)
+      : MAX_INPUT_BYTES;
 
-  const { writer, error } = useQrStreamWriter({
+  const { writer, error, pending } = useQrStreamWriter({
     data,
     filename,
     preset,
@@ -65,8 +70,8 @@ export function QrStreamSender({
     controllerRef.current = null;
     runningRef.current = false;
     setRunning(false);
-    onRunningChange?.(false);
-  }, [onRunningChange]);
+    onRunningChangeRef.current?.(false);
+  }, []);
 
   const start = useCallback(() => {
     if (!writer || !canvasRef.current) return;
@@ -81,8 +86,8 @@ export function QrStreamSender({
     controllerRef.current.play();
     runningRef.current = true;
     setRunning(true);
-    onRunningChange?.(true);
-  }, [fps, onRunningChange, preset, writer]);
+    onRunningChangeRef.current?.(true);
+  }, [fps, preset, writer]);
 
   useEffect(() => stop, [stop]);
 
@@ -91,6 +96,18 @@ export function QrStreamSender({
   // passphrase was typed, so a settings change restarts the stream.
   useEffect(() => {
     if (!runningRef.current) return;
+
+    // The rebuilt writer is not ready yet. Stop the old stream now; the effect
+    // runs again when the new writer resolves.
+    if (writer === null) {
+      controllerRef.current?.stop();
+      controllerRef.current = null;
+      runningRef.current = false;
+      setRunning(false);
+      onRunningChangeRef.current?.(false);
+      return;
+    }
+
     start();
   }, [writer, start]);
 
@@ -154,7 +171,7 @@ export function QrStreamSender({
         onClick={running ? stop : start}
         disabled={writer === null}
       >
-        {running ? 'Stop stream' : 'Start stream'}
+        {running ? 'Stop stream' : pending ? 'Preparing…' : 'Start stream'}
       </button>
 
       {running ? (

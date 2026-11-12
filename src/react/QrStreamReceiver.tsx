@@ -64,7 +64,18 @@ export function QrStreamReceiver({
   );
 
   useEffect(() => {
-    if (!result || completedRef.current === result.data) return;
+    if (!result) {
+      // A reset or a new session clears the delivered marker and releases the
+      // previous download URL. `reader.result()` memoizes the verified bytes,
+      // so the identity check below is stable for a completed transfer.
+      completedRef.current = null;
+      setDownloadUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return null;
+      });
+      return;
+    }
+    if (completedRef.current === result.data) return;
     completedRef.current = result.data;
 
     if (download) {
