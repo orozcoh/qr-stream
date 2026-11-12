@@ -58,6 +58,14 @@ The codec entry has no dependencies. The React entry needs React 19, and the
 decoder needs `zxing-wasm` (see [Decoders](#decoders)). Neither is installed for
 you, so a project that only encodes ships neither.
 
+## Version compatibility
+
+`0.2.0` authenticates the metadata block of an encrypted transfer with AES-GCM
+additional authenticated data. A `0.2.0` receiver cannot decrypt a `0.1.x`
+encrypted stream, and a `0.1.x` receiver cannot decrypt a `0.2.0` encrypted
+stream; update both devices before a transfer. Unencrypted streams are
+unaffected.
+
 ## Library API
 
 ```ts

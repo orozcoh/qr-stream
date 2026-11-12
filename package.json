@@ -1,6 +1,6 @@
 {
   "name": "@orozcoh/qr-stream",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reliable one-way file transfer between devices using animated fountain-coded QR codes, with an offline PWA and a React reader/writer.",
   "keywords": [
     "qr",
