@@ -314,7 +314,7 @@ Two phases, both behind an auth preflight (`gh` must be the repo owner and
 `npm whoami` must succeed):
 
 ```bash
-pnpm release:check
+pnpm release:check   # read-only: auth, branch, sync, version, tag, npm, release
 pnpm release:prepare 0.3.0   # bump, changelog check, tests, PR, verify, merge
 pnpm release:publish         # tag, npm publish, GitHub release, smoke test
 ```
