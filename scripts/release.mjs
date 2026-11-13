@@ -218,8 +218,11 @@ function ensureCleanMain(allowed = []) {
   if (head !== remote) fail('local main is not up to date with origin/main; run: git pull --ff-only');
 }
 
-function checkDeploy(sha) {
-  if (skipDeploy) return;
+function sleep(seconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, seconds * 1000);
+}
+
+function findDeployRun(sha) {
   const runs = JSON.parse(
     capture('gh', [
       'run',
@@ -231,16 +234,35 @@ function checkDeploy(sha) {
       '--branch',
       'main',
       '--limit',
-      '5',
+      '10',
       '--json',
       'databaseId,headSha,status,conclusion',
     ]).stdout || '[]',
   );
-  const latest = runs.find((item) => item.headSha === sha);
-  if (!latest) {
-    note('no deploy run found for HEAD yet; skipping the deploy check');
-    return;
+  return runs.find((item) => item.headSha === sha) ?? null;
+}
+
+function checkDeploy(sha) {
+  if (skipDeploy) return;
+  let latest = findDeployRun(sha);
+  for (let attempt = 0; !latest && attempt < 6; attempt += 1) {
+    note(`no deploy run for ${sha.slice(0, 7)} yet; waiting`);
+    sleep(5);
+    latest = findDeployRun(sha);
   }
+  if (!latest) {
+    if (dry) {
+      note(`dry run: would dispatch deploy.yml for ${sha.slice(0, 7)}`);
+      return;
+    }
+    info('no push-triggered deploy run found; dispatching deploy from main');
+    run('gh', ['workflow', 'run', 'deploy.yml', '--repo', REPO, '--ref', 'main']);
+    for (let attempt = 0; !latest && attempt < 12; attempt += 1) {
+      sleep(5);
+      latest = findDeployRun(sha);
+    }
+  }
+  if (!latest) fail(`no deploy run found for ${sha.slice(0, 7)}; run: gh workflow run deploy.yml --repo ${REPO} --ref main`);
   if (latest.status !== 'completed') {
     info(`waiting for deploy ${latest.databaseId}`);
     run('gh', ['run', 'watch', String(latest.databaseId), '--repo', REPO, '--exit-status', '--interval', '10']);
