@@ -329,6 +329,9 @@ pnpm release:publish         # tag, npm publish, GitHub release, smoke test
 - `--dry-run` prints the actions without changing anything. `--yes` skips the
   confirmations. `--skip-checks` and `--skip-deploy-check` are escape hatches
   for a broken runner, not the normal path.
+- `release:prepare` waits for the deploy run; if GitHub misses the push event,
+  it dispatches `deploy.yml` from `main` instead of silently skipping the
+  deploy check.
 - For a 2FA account: `NPM_OTP=123456 pnpm release:publish`.
 
 The repo’s `main` ruleset requires a PR and the `verify` check, so
