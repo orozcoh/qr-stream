@@ -308,6 +308,32 @@ Open `https://qr-stream.digitalerror.xyz` on each device once and install it.
 That single visit is what caches the app and the WASM decoder; after it, the
 devices work with no network at all.
 
+## Release
+
+Two phases, both behind an auth preflight (`gh` must be the repo owner and
+`npm whoami` must succeed):
+
+```bash
+pnpm release:check
+pnpm release:prepare 0.3.0   # bump, changelog check, tests, PR, verify, merge
+pnpm release:publish         # tag, npm publish, GitHub release, smoke test
+```
+
+- `release:prepare` requires a `## <version>` section in `CHANGELOG.md`; it
+  refuses to bump without one. You can write that section on `main` and leave
+  it uncommitted: `prepare` includes it in the release commit, so the changelog
+  and the bump pass `verify` in the same PR.
+- `release:publish` refuses if the version is already on npm, the tag points
+  elsewhere, or the GitHub release exists; use `--resume` / `--update-release`
+  to recover.
+- `--dry-run` prints the actions without changing anything. `--yes` skips the
+  confirmations. `--skip-checks` and `--skip-deploy-check` are escape hatches
+  for a broken runner, not the normal path.
+- For a 2FA account: `NPM_OTP=123456 pnpm release:publish`.
+
+The repo’s `main` ruleset requires a PR and the `verify` check, so
+`release:prepare` merges only after CI passes.
+
 ## Consuming the built package
 
 `dist/` ships ESM plus declarations whose relative imports are extensionless, so
