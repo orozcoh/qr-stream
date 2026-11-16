@@ -224,8 +224,9 @@ export function QrStreamReceiver({
 
         {diagnostics?.active ? (
           <p>
-            Active: {diagnostics.active.label || 'unnamed'} · {diagnostics.active.settings.width}×
-            {diagnostics.active.settings.height} @ {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
+            Active: {diagnostics.active.label || 'unnamed'} ·{' '}
+            {`${diagnostics.active.settings.width}×${diagnostics.active.settings.height}`} @{' '}
+            {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
             {String(diagnostics.active.capabilities.focusMode ?? 'n/a')}
           </p>
         ) : null}
