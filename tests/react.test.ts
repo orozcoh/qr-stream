@@ -1,12 +1,11 @@
-import { describe, expect, test } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { QrStreamSender } from '../src/react/QrStreamSender';
-import { QrStreamReceiver } from '../src/react/QrStreamReceiver';
+import { describe, expect, test } from 'vitest';
 import { describeAccept, matchesAccept } from '../src/react/file-accept';
+import { QrStreamReceiver } from '../src/react/QrStreamReceiver';
+import { QrStreamSender } from '../src/react/QrStreamSender';
 
-const fakeFile = (name: string, type: string): File =>
-  ({ name, type, size: 10 }) as unknown as File;
+const fakeFile = (name: string, type: string): File => ({ name, type, size: 10 }) as unknown as File;
 
 /** SSR never runs effects, so this factory is only here to satisfy the type. */
 const stubDecoder = async () => ({ decode: async () => null });
@@ -73,7 +72,9 @@ describe('QrStreamReceiver', () => {
   });
 
   test('renders a heading when asked', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder, title: 'Receive a file' }));
+    const html = renderToStaticMarkup(
+      createElement(QrStreamReceiver, { decoder: stubDecoder, title: 'Receive a file' }),
+    );
     expect(html).toContain('Receive a file');
   });
 
@@ -91,7 +92,9 @@ describe('QrStreamReceiver', () => {
   });
 
   test('camera controls can be suppressed entirely', () => {
-    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder, cameraControls: 'hidden' }));
+    const html = renderToStaticMarkup(
+      createElement(QrStreamReceiver, { decoder: stubDecoder, cameraControls: 'hidden' }),
+    );
     expect(html).not.toContain('Switch camera');
   });
 });

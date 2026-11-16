@@ -61,7 +61,10 @@ describe('packetToMatrix', () => {
 
   test('different packets produce different matrices', () => {
     const a = packetToMatrix(packet, 20);
-    const b = packetToMatrix(Uint8Array.from(packet, (v) => v ^ 0xff), 20);
+    const b = packetToMatrix(
+      Uint8Array.from(packet, (v) => v ^ 0xff),
+      20,
+    );
     let differences = 0;
     for (let y = 0; y < a.size; y += 1) {
       for (let x = 0; x < a.size; x += 1) if (a.get(x, y) !== b.get(x, y)) differences += 1;

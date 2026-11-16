@@ -1,5 +1,5 @@
-import { packetToMatrix } from '../qr/matrix';
-import { matrixToRGBA } from '../qr/raster';
+import { packetToMatrix } from '../qr/matrix.js';
+import { matrixToRGBA } from '../qr/raster.js';
 
 /**
  * Snap a requested frame rate to a divisor of the display refresh rate.

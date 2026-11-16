@@ -1,10 +1,10 @@
-import { gzipIfSmaller } from './compress';
-import { DEFAULT_ITERATIONS, NONCE_BYTES, SALT_BYTES, encryptBytes } from './crypto';
-import { encodeSymbol } from './fountain';
-import { encodeMeta, sanitizeFilename, writeVarint, type StreamMeta } from './meta';
-import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet';
-import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS, type PresetName } from './types';
-import { qrCapacity } from './capacity';
+import { qrCapacity } from './capacity.js';
+import { gzipIfSmaller } from './compress.js';
+import { DEFAULT_ITERATIONS, NONCE_BYTES, SALT_BYTES, encryptBytes } from './crypto.js';
+import { encodeSymbol } from './fountain.js';
+import { encodeMeta, sanitizeFilename, writeVarint, type StreamMeta } from './meta.js';
+import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet.js';
+import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS, type PresetName } from './types.js';
 
 export interface WriterOptions {
   filename: string;

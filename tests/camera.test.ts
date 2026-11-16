@@ -66,9 +66,7 @@ describe('camera lifecycle', () => {
         calls += 1;
         return calls === 1 ? first : secondGate.promise;
       }),
-      enumerateDevices: vi.fn(async () => [
-        { kind: 'videoinput', deviceId: 'cam-1', label: 'cam-1', groupId: 'g1' },
-      ]),
+      enumerateDevices: vi.fn(async () => [{ kind: 'videoinput', deviceId: 'cam-1', label: 'cam-1', groupId: 'g1' }]),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     };

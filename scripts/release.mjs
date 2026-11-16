@@ -13,8 +13,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { createInterface } from 'node:readline/promises';
 
 const REPO = 'orozcoh/qr-stream';
 const PACKAGE = '@orozcoh/qr-stream';
@@ -89,7 +89,9 @@ function capture(cmd, cmdArgs, options = {}) {
   });
   if (result.error) fail(`${cmd}: ${result.error.message}`);
   if (result.status !== 0 && !options.allowFail) {
-    fail(`${printable(cmd, cmdArgs)} failed (exit ${result.status})${result.stderr ? `\n${result.stderr.trim()}` : ''}`);
+    fail(
+      `${printable(cmd, cmdArgs)} failed (exit ${result.status})${result.stderr ? `\n${result.stderr.trim()}` : ''}`,
+    );
   }
   const text = result.stdout ?? '';
   return {
@@ -262,7 +264,8 @@ function checkDeploy(sha) {
       latest = findDeployRun(sha);
     }
   }
-  if (!latest) fail(`no deploy run found for ${sha.slice(0, 7)}; run: gh workflow run deploy.yml --repo ${REPO} --ref main`);
+  if (!latest)
+    fail(`no deploy run found for ${sha.slice(0, 7)}; run: gh workflow run deploy.yml --repo ${REPO} --ref main`);
   if (latest.status !== 'completed') {
     info(`waiting for deploy ${latest.databaseId}`);
     run('gh', ['run', 'watch', String(latest.databaseId), '--repo', REPO, '--exit-status', '--interval', '10']);
@@ -438,7 +441,9 @@ async function publish() {
 
   if (dry) {
     info(`dry run: publish ${PACKAGE}@${version}`);
-    note(`would tag ${tag}, push it, ${published ? 'skip npm publish (already published)' : 'run npm publish'}, ${hasRelease ? 'update' : 'create'} the GitHub release, and smoke-test`);
+    note(
+      `would tag ${tag}, push it, ${published ? 'skip npm publish (already published)' : 'run npm publish'}, ${hasRelease ? 'update' : 'create'} the GitHub release, and smoke-test`,
+    );
     return;
   }
 

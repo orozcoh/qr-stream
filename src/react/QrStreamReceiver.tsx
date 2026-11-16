@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ensureQrStreamStyles } from './styles';
-import { useCameraReader } from './useCameraReader';
-import type { FrameDecoder } from '../browser/decoder';
-import { useQrStreamReader } from './useQrStreamReader';
+import type { FrameDecoder } from '../browser/decoder.js';
+import { ensureQrStreamStyles } from './styles.js';
+import { useCameraReader } from './useCameraReader.js';
+import { useQrStreamReader } from './useQrStreamReader.js';
 
 ensureQrStreamStyles();
 
@@ -58,10 +58,7 @@ export function QrStreamReceiver({
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const completedRef = useRef<Uint8Array | null>(null);
 
-  const complete = useCallback(
-    (data: Uint8Array, filename: string) => onComplete?.(data, filename),
-    [onComplete],
-  );
+  const complete = useCallback((data: Uint8Array, filename: string) => onComplete?.(data, filename), [onComplete]);
 
   useEffect(() => {
     if (!result) {
@@ -93,8 +90,7 @@ export function QrStreamReceiver({
   );
 
   const percent = progress.k > 0 ? Math.round((progress.solved / progress.k) * 100) : 0;
-  const showCameraPicker =
-    cameraControls === 'always' || (cameraControls === 'auto' && devices.length > 1);
+  const showCameraPicker = cameraControls === 'always' || (cameraControls === 'auto' && devices.length > 1);
   const showSwitch = cameraControls !== 'hidden' && devices.length > 1;
 
   return (
@@ -107,7 +103,12 @@ export function QrStreamReceiver({
       </div>
 
       {showSwitch ? (
-        <button type="button" className="qrs__button qrs__button--ghost" onClick={() => void cycle()} disabled={switching}>
+        <button
+          type="button"
+          className="qrs__button qrs__button--ghost"
+          onClick={() => void cycle()}
+          disabled={switching}
+        >
           {switching ? 'Switching…' : 'Switch camera'}
         </button>
       ) : null}
@@ -223,18 +224,22 @@ export function QrStreamReceiver({
 
         {diagnostics?.active ? (
           <p>
-            Active: {diagnostics.active.label || 'unnamed'} ·{' '}
-            {diagnostics.active.settings.width}×{diagnostics.active.settings.height} @{' '}
-            {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
+            Active: {diagnostics.active.label || 'unnamed'} · {diagnostics.active.settings.width}×
+            {diagnostics.active.settings.height} @ {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
             {String(diagnostics.active.capabilities.focusMode ?? 'n/a')}
           </p>
         ) : null}
 
         <p style={{ marginBottom: 8 }}>
-          Some Android builds only list secondary rear cameras after the stream has been opened
-          once. If your phone has more than the browser lists, that is a browser limit.
+          Some Android builds only list secondary rear cameras after the stream has been opened once. If your phone has
+          more than the browser lists, that is a browser limit.
         </p>
-        <button type="button" className="qrs__button qrs__button--ghost" onClick={() => void rescan()} disabled={switching}>
+        <button
+          type="button"
+          className="qrs__button qrs__button--ghost"
+          onClick={() => void rescan()}
+          disabled={switching}
+        >
           {switching ? 'Scanning…' : 'Rescan cameras'}
         </button>
       </details>

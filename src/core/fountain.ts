@@ -1,4 +1,4 @@
-import { symbolIndices } from './prng';
+import { symbolIndices } from './prng.js';
 
 /**
  * Produce the payload for one symbol.
@@ -118,7 +118,8 @@ export class FountainDecoder {
     this.peel();
   }
 
-  assemble(): Uint8Array | null {    if (!this.isComplete) return null;
+  assemble(): Uint8Array | null {
+    if (!this.isComplete) return null;
     const out = new Uint8Array(this.sourceCount * this.blockSize);
     for (let i = 0; i < this.sourceCount; i += 1) {
       out.set(this.blocks[i] as Uint8Array, i * this.blockSize);

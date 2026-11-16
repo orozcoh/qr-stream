@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  readQrStream,
-  type CameraController,
-  type CameraDevice,
-  type CameraDiagnostics,
-} from '../browser/camera';
-import type { FrameDecoder } from '../browser/decoder';
+import { readQrStream, type CameraController, type CameraDevice, type CameraDiagnostics } from '../browser/camera.js';
+import type { FrameDecoder } from '../browser/decoder.js';
 
 export interface UseCameraReaderOptions {
   deviceId?: string;
@@ -129,28 +124,16 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
     [sync],
   );
 
-  const select = useCallback(
-    (id: string) => runSwitch(() => controllerRef.current?.select(id)),
-    [runSwitch],
-  );
+  const select = useCallback((id: string) => runSwitch(() => controllerRef.current?.select(id)), [runSwitch]);
 
-  const cycle = useCallback(
-    () => runSwitch(() => controllerRef.current?.cycle()),
-    [runSwitch],
-  );
+  const cycle = useCallback(() => runSwitch(() => controllerRef.current?.cycle()), [runSwitch]);
 
-  const rescan = useCallback(
-    () => runSwitch(() => controllerRef.current?.rescan()),
-    [runSwitch],
-  );
+  const rescan = useCallback(() => runSwitch(() => controllerRef.current?.rescan()), [runSwitch]);
 
-  const setZoom = useCallback(
-    async (value: number) => {
-      setZoomValue(value);
-      await controllerRef.current?.setZoom(value);
-    },
-    [],
-  );
+  const setZoom = useCallback(async (value: number) => {
+    setZoomValue(value);
+    await controllerRef.current?.setZoom(value);
+  }, []);
 
   return {
     videoRef,

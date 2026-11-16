@@ -1,4 +1,4 @@
-import { MAX_INPUT_BYTES } from './types';
+import { MAX_INPUT_BYTES } from './types.js';
 
 async function pipe(bytes: Uint8Array, transform: CompressionStream): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(transform);

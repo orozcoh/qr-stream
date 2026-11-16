@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
+import { WrongKeyError } from '../src/core/crypto';
+import { decodePacket, encodePacket } from '../src/core/packet';
 import { createQrStreamReader } from '../src/core/reader';
 import { createQrStreamWriter } from '../src/core/writer';
-import { decodePacket, encodePacket } from '../src/core/packet';
-import { WrongKeyError } from '../src/core/crypto';
 
 async function collect(writer: Awaited<ReturnType<typeof createQrStreamWriter>>, count: number) {
   const out: Uint8Array[] = [];
@@ -51,9 +51,7 @@ describe('createQrStreamReader', () => {
 
     const result = await reader.result();
     expect(result).not.toBeNull();
-    expect(new TextDecoder().decode((result as { data: Uint8Array }).data)).toBe(
-      new TextDecoder().decode(json),
-    );
+    expect(new TextDecoder().decode((result as { data: Uint8Array }).data)).toBe(new TextDecoder().decode(json));
     expect((result as { meta: { filename: string } }).meta.filename).toBe('data.json');
   });
 
@@ -71,9 +69,7 @@ describe('createQrStreamReader', () => {
 
     const retried = await reader.result('blue seven kilo');
     expect(retried).not.toBeNull();
-    expect(new TextDecoder().decode((retried as { data: Uint8Array }).data)).toBe(
-      new TextDecoder().decode(json),
-    );
+    expect(new TextDecoder().decode((retried as { data: Uint8Array }).data)).toBe(new TextDecoder().decode(json));
   });
 
   test('reset forgets the session', async () => {

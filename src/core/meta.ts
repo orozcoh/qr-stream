@@ -24,6 +24,7 @@ const SHA256_BYTES = 32;
  * name that is rendered and offered as a download. Strip them rather than
  * trusting the peer's filename verbatim.
  */
+// eslint-disable-next-line no-control-regex -- the class must strip control and bidi characters
 const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069/\\]/g;
 
 export function sanitizeFilename(name: string): string {

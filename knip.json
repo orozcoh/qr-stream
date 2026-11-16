@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/index.ts",
+    "src/browser.ts",
+    "src/qr.ts",
+    "src/react/index.ts",
+    "src/browser/decoders/zxing.ts",
+    "scripts/release.mjs"
+  ],
+  "ignoreDependencies": ["@types/emscripten", "zxing-wasm"]
+}

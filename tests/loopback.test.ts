@@ -3,11 +3,11 @@ import { createRequire } from 'node:module';
 import { describe, expect, test, beforeAll } from 'vitest';
 import { prepareZXingModule } from 'zxing-wasm/reader';
 import { createZXingDecoder } from '../src/browser/decoders/zxing';
-import { createQrStreamWriter } from '../src/core/writer';
 import { decodePacket } from '../src/core/packet';
+import { PRESETS, type PresetName } from '../src/core/types';
+import { createQrStreamWriter } from '../src/core/writer';
 import { packetToMatrix } from '../src/qr/matrix';
 import { matrixToRGBA } from '../src/qr/raster';
-import { PRESETS, type PresetName } from '../src/core/types';
 
 const require = createRequire(import.meta.url);
 

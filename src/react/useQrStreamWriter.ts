@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createQrStreamWriter, type QrStreamWriter } from '../core/writer';
-import type { PresetName } from '../core/types';
+import type { PresetName } from '../core/types.js';
+import { createQrStreamWriter, type QrStreamWriter } from '../core/writer.js';
 
 export interface UseQrStreamWriterOptions {
   data: Uint8Array | null;
@@ -30,6 +30,7 @@ export function useQrStreamWriter(options: UseQrStreamWriterOptions): UseQrStrea
   // only state that Start may trust: it is updated during render, whereas the
   // effect that builds the next writer runs after the render. Without it, the
   // passphrase-changed render still sees the previous cleartext writer.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the values are identity inputs, not memo inputs
   const settingsKey = useMemo(() => ({}), [data, filename, preset, passphrase]);
   const [state, setState] = useState<WriterState | null>(null);
   const [error, setError] = useState<Error | null>(null);

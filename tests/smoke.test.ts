@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import {
-  FRAME_OVERHEAD,
-  HEADER_SIZE,
-  MAX_INPUT_BYTES,
-  PRESETS,
-} from '../src/core/types';
+import { FRAME_OVERHEAD, HEADER_SIZE, MAX_INPUT_BYTES, PRESETS } from '../src/core/types';
 
 describe('shared constants', () => {
   test('header is 16 bytes and full frame overhead is 20', () => {

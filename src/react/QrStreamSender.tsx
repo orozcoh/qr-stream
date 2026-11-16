@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { MAX_INPUT_BYTES, PRESETS, type PresetName } from '../core/types';
-import {
-  estimateTransferSeconds,
-  quantizeFps,
-  renderQrStream,
-  type RenderController,
-} from '../browser/render';
-import { describeAccept, matchesAccept } from './file-accept';
-import { ensureQrStreamStyles } from './styles';
-import { useQrStreamWriter } from './useQrStreamWriter';
+import { estimateTransferSeconds, quantizeFps, renderQrStream, type RenderController } from '../browser/render.js';
+import { MAX_INPUT_BYTES, PRESETS, type PresetName } from '../core/types.js';
+import { describeAccept, matchesAccept } from './file-accept.js';
+import { ensureQrStreamStyles } from './styles.js';
+import { useQrStreamWriter } from './useQrStreamWriter.js';
 
 ensureQrStreamStyles();
 
@@ -143,9 +138,7 @@ export function QrStreamSender({
       <div className="qrs__stage" data-empty={!running}>
         <canvas ref={canvasRef} className="qrs__canvas" aria-label="QR stream" />
         {running ? null : (
-          <span className="qrs__placeholder">
-            {writer ? 'Ready — press start' : 'Choose a file to begin'}
-          </span>
+          <span className="qrs__placeholder">{writer ? 'Ready — press start' : 'Choose a file to begin'}</span>
         )}
       </div>
 
@@ -177,52 +170,52 @@ export function QrStreamSender({
       {running ? (
         <p className="qrs__meta">Stop the stream to change the file, density, or passphrase.</p>
       ) : (
-      <div className="qrs__settings">
-        <label className="qrs__field">
-          <span className="qrs__label">
-            File {accept ? <span className="qrs__hint">— {describeAccept(accept)}</span> : null}
-          </span>
-          <input
-            className="qrs__input"
-            type="file"
-            {...(accept ? { accept } : {})}
-            onChange={(event) => void pickFile(event.target.files?.[0])}
-          />
-        </label>
+        <div className="qrs__settings">
+          <label className="qrs__field">
+            <span className="qrs__label">
+              File {accept ? <span className="qrs__hint">— {describeAccept(accept)}</span> : null}
+            </span>
+            <input
+              className="qrs__input"
+              type="file"
+              {...(accept ? { accept } : {})}
+              onChange={(event) => void pickFile(event.target.files?.[0])}
+            />
+          </label>
 
-        <label className="qrs__field">
-          <span className="qrs__label">Density</span>
-          <select
-            className="qrs__select"
-            value={preset}
-            onChange={(event) => {
-              const next = event.target.value as PresetName;
-              setPreset(next);
-              setFps(PRESETS[next].fps);
-            }}
-          >
-            {(Object.keys(PRESETS) as PresetName[]).map((name) => (
-              <option key={name} value={name}>
-                {name} — v{PRESETS[name].version}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="qrs__field">
+            <span className="qrs__label">Density</span>
+            <select
+              className="qrs__select"
+              value={preset}
+              onChange={(event) => {
+                const next = event.target.value as PresetName;
+                setPreset(next);
+                setFps(PRESETS[next].fps);
+              }}
+            >
+              {(Object.keys(PRESETS) as PresetName[]).map((name) => (
+                <option key={name} value={name}>
+                  {name} — v{PRESETS[name].version}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="qrs__field">
-          <span className="qrs__label">
-            Passphrase <span className="qrs__hint">— optional</span>
-          </span>
-          <input
-            className="qrs__input"
-            type="password"
-            value={passphrase}
-            autoComplete="off"
-            onChange={(event) => setPassphrase(event.target.value)}
-            placeholder="say it aloud, type it on both devices"
-          />
-        </label>
-      </div>
+          <label className="qrs__field">
+            <span className="qrs__label">
+              Passphrase <span className="qrs__hint">— optional</span>
+            </span>
+            <input
+              className="qrs__input"
+              type="password"
+              value={passphrase}
+              autoComplete="off"
+              onChange={(event) => setPassphrase(event.target.value)}
+              placeholder="say it aloud, type it on both devices"
+            />
+          </label>
+        </div>
       )}
 
       {error ? (

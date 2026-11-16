@@ -1,0 +1,26 @@
+[
+  {
+    "name": "@orozcoh/qr-stream",
+    "path": "dist/index.js",
+    "gzip": true,
+    "limit": "6 kB"
+  },
+  {
+    "name": "@orozcoh/qr-stream/browser",
+    "path": "dist/browser.js",
+    "gzip": true,
+    "limit": "13 kB"
+  },
+  {
+    "name": "@orozcoh/qr-stream/qr",
+    "path": "dist/qr.js",
+    "gzip": true,
+    "limit": "10 kB"
+  },
+  {
+    "name": "@orozcoh/qr-stream/react",
+    "path": "dist/react.js",
+    "gzip": true,
+    "limit": "25 kB"
+  }
+]

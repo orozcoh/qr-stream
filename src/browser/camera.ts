@@ -1,4 +1,4 @@
-import type { FrameDecoder } from './decoder';
+import type { FrameDecoder } from './decoder.js';
 
 export interface CameraDevice {
   deviceId: string;
@@ -109,9 +109,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
   const enumerate = async (): Promise<CameraDevice[]> => {
     const all = await navigator.mediaDevices.enumerateDevices();
-    tracks = all
-      .filter((device) => device.kind === 'videoinput')
-      .map((device, index) => describe(device, index));
+    tracks = all.filter((device) => device.kind === 'videoinput').map((device, index) => describe(device, index));
     return tracks;
   };
 
@@ -262,7 +260,6 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
   navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
 
-
   schedule();
 
   return {
@@ -299,9 +296,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
       // has actually been opened and enumerated again.
       const previous = active;
       await open(
-        previous
-          ? { video: { deviceId: { exact: previous } } }
-          : { video: { facingMode: { ideal: 'environment' } } },
+        previous ? { video: { deviceId: { exact: previous } } } : { video: { facingMode: { ideal: 'environment' } } },
       );
     },
 

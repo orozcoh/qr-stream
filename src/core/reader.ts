@@ -1,10 +1,10 @@
-import { MAX_FRAME_PAYLOAD, qrCapacity } from './capacity';
-import { gunzip } from './compress';
-import { NONCE_BYTES, SALT_BYTES, decryptBytes } from './crypto';
-import { FountainDecoder } from './fountain';
-import { decodeMeta, readVarint, type StreamMeta } from './meta';
-import { FLAG_ENCRYPTED, FLAG_GZIP, decodePacket } from './packet';
-import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS } from './types';
+import { MAX_FRAME_PAYLOAD, qrCapacity } from './capacity.js';
+import { gunzip } from './compress.js';
+import { NONCE_BYTES, SALT_BYTES, decryptBytes } from './crypto.js';
+import { FountainDecoder } from './fountain.js';
+import { decodeMeta, readVarint, type StreamMeta } from './meta.js';
+import { FLAG_ENCRYPTED, FLAG_GZIP, decodePacket } from './packet.js';
+import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS } from './types.js';
 
 export type AddResult = 'accepted' | 'duplicate' | 'stale-session' | 'invalid';
 
@@ -131,11 +131,7 @@ export function createQrStreamReader(): QrStreamReader {
       if (requiredWire > bodyLen) throw new RangeError('wire length exceeds payload');
 
       if (encrypted) {
-        if (
-          parsed.salt?.length !== SALT_BYTES ||
-          parsed.nonce?.length !== NONCE_BYTES ||
-          parsed.iterations < 1
-        ) {
+        if (parsed.salt?.length !== SALT_BYTES || parsed.nonce?.length !== NONCE_BYTES || parsed.iterations < 1) {
           throw new RangeError('invalid encryption parameters in metadata');
         }
       }

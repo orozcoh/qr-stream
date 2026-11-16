@@ -1,7 +1,7 @@
 import qrcode from 'qrcode-generator';
-import { qrCapacity } from '../core/capacity';
+import { qrCapacity } from '../core/capacity.js';
 
-export { qrCapacity } from '../core/capacity';
+export { qrCapacity } from '../core/capacity.js';
 
 export interface QrMatrix {
   version: number;

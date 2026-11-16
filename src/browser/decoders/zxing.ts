@@ -1,5 +1,5 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
-import type { FrameDecoder } from '../decoder';
+import type { FrameDecoder } from '../decoder.js';
 
 export interface ZXingDecoderOptions {
   /**

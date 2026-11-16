@@ -34,9 +34,7 @@ describe('reader hardening', () => {
 
   test('rejects an absurd blockSize', () => {
     const reader = createQrStreamReader();
-    expect(reader.add(encodePacket({ ...valid, blockSize: 60000, payload: new Uint8Array(32) }))).toBe(
-      'invalid',
-    );
+    expect(reader.add(encodePacket({ ...valid, blockSize: 60000, payload: new Uint8Array(32) }))).toBe('invalid');
   });
 
   test('a short final payload does not poison the symbol index', () => {
@@ -62,26 +60,22 @@ describe('reader hardening', () => {
   test('rejects K above the largest legal 1 MiB stream', () => {
     const reader = createQrStreamReader();
     expect(
-      reader.add(
-        encodePacket({ ...valid, k: MAX_SOURCE_BLOCKS + 1, blockSize: 32, payload: new Uint8Array(32) }),
-      ),
+      reader.add(encodePacket({ ...valid, k: MAX_SOURCE_BLOCKS + 1, blockSize: 32, payload: new Uint8Array(32) })),
     ).toBe('invalid');
     expect(reader.sessionId()).toBeNull();
   });
 
   test('rejects a blockSize above the writer frame payload', () => {
     const reader = createQrStreamReader();
-    expect(
-      reader.add(encodePacket({ ...valid, blockSize: 2934, payload: new Uint8Array(2934) })),
-    ).toBe('invalid');
+    expect(reader.add(encodePacket({ ...valid, blockSize: 2934, payload: new Uint8Array(2934) }))).toBe('invalid');
     expect(reader.sessionId()).toBeNull();
   });
 
   test('rejects K * blockSize above the 1 MiB stream budget', () => {
     const reader = createQrStreamReader();
-    expect(
-      reader.add(encodePacket({ ...valid, k: 1252, blockSize: 2933, payload: new Uint8Array(2933) })),
-    ).toBe('invalid');
+    expect(reader.add(encodePacket({ ...valid, k: 1252, blockSize: 2933, payload: new Uint8Array(2933) }))).toBe(
+      'invalid',
+    );
     expect(reader.sessionId()).toBeNull();
   });
 

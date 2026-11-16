@@ -1,4 +1,4 @@
-import type { QrMatrix } from './matrix';
+import type { QrMatrix } from './matrix.js';
 
 export interface RasterImage {
   data: Uint8ClampedArray<ArrayBuffer>;

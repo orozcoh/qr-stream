@@ -1,5 +1,5 @@
-import { crc32 } from './crc32';
-import { HEADER_SIZE } from './types';
+import { crc32 } from './crc32.js';
+import { HEADER_SIZE } from './types.js';
 
 /** "QS" — rejects QR codes that belong to something else. */
 export const MAGIC = 0x5153;

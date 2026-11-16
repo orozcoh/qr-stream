@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { WrongKeyError } from '../core/crypto';
-import type { StreamMeta } from '../core/meta';
-import { createQrStreamReader } from '../core/reader';
+import { WrongKeyError } from '../core/crypto.js';
+import type { StreamMeta } from '../core/meta.js';
+import { createQrStreamReader } from '../core/reader.js';
 
 export interface UseQrStreamReaderOptions {
   passphrase?: string;

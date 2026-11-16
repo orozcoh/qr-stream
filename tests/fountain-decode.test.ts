@@ -12,9 +12,7 @@ function lcg(seed: number): () => number {
 
 function makeBlocks(k: number, size: number, seed: number): Uint8Array[] {
   const rand = lcg(seed);
-  return Array.from({ length: k }, () =>
-    Uint8Array.from({ length: size }, () => Math.floor(rand() * 256)),
-  );
+  return Array.from({ length: k }, () => Uint8Array.from({ length: size }, () => Math.floor(rand() * 256)));
 }
 
 const concat = (blocks: Uint8Array[]): Uint8Array =>
@@ -132,7 +130,6 @@ describe('FountainDecoder', () => {
   });
 
   test('ignores payloads of the wrong length', () => {
-    const blocks = makeBlocks(3, 4, 4);
     const decoder = new FountainDecoder(3, 4, 5);
     decoder.add(0, new Uint8Array(9));
     expect(decoder.solvedCount).toBe(0);

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { MAX_INPUT_BYTES, PRESETS } from '../src/core/types';
-import { createQrStreamWriter } from '../src/core/writer';
-import { decodePacket } from '../src/core/packet';
 import { decodeMeta } from '../src/core/meta';
 import { readVarint } from '../src/core/meta';
+import { decodePacket } from '../src/core/packet';
+import { MAX_INPUT_BYTES, PRESETS } from '../src/core/types';
+import { createQrStreamWriter } from '../src/core/writer';
 
 function lcg(seed: number): () => number {
   let state = seed >>> 0;
