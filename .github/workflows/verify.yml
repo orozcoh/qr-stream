@@ -33,6 +33,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Dependency rules
+        run: pnpm deps:check
+
       - name: Format check
         run: pnpm format:check
 
