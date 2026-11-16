@@ -150,8 +150,14 @@ One-time setup:
   `id-token: write`. The OIDC token, not the npm token, is what Sigstore uses to
   attest the tarball.
 - If you would rather not store a token, configure npm trusted publishing for
-  this repository and remove the `NODE_AUTH_TOKEN` line from the publish step.
-  The `id-token: write` permission is required either way.
+  this repository, then **also** remove two things: the `NODE_AUTH_TOKEN`
+  environment line from the publish step, and `registry-url:
+  https://registry.npmjs.org` from the `setup-node` step. `setup-node` writes
+  `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into `.npmrc` whenever
+  `registry-url` is set; with no token that entry sends an empty credential and
+  npm fails `E401` before it ever attempts the OIDC exchange. Trusted publishing
+  needs no `_authToken` line at all. The `id-token: write` permission is
+  required either way.
 
 `dry_run` defaults to **true**, so the first dispatch packs and reports without
 uploading:
@@ -230,11 +236,11 @@ GitHub Actions, which additionally requires:
   (case-sensitive).
 
 `publish.yml` satisfies all three and passes `--provenance` on every real
-publish. Its dry run does not exercise the attestation: npm skips the whole
-upload path under `--dry-run`, so a green dry run proves the pack, the version,
-the registry and the auth wiring — not the signature. `scripts/release.mjs`
-adds the flag only when the same conditions are visible; locally none are, so it
-publishes unsigned and says so.
+publish. A green dry run proves the pack, version, and tag arguments — not the
+signature and not the token; npm makes no registry request under `--dry-run`, so
+auth is first exercised on the real run. `scripts/release.mjs` adds the flag
+only when the same conditions are visible; locally none are, so it publishes
+unsigned and says so.
 
 To check what a published version carries:
 

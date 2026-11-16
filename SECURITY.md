@@ -14,13 +14,14 @@ what is explicitly out of scope, lives in
 
 | Version | Supported | Notes |
 | --- | --- | --- |
-| `0.3.x` | Yes | Current line. Security fixes ship as patch releases. |
-| `0.2.x` | No | Unsupported. A fix is backported only when an advisory names that version. |
-| `0.1.x` and older | No | Unsupported; upgrade to `0.3.x`. |
+| `0.3.x` | Not yet published | The 0.3.0 release is prepared in this repository but is not on npm; `npm view` still resolves `latest` to `0.2.0`. |
+| `0.2.x` | Yes, until `0.3.0` ships | The registry's current `latest`. Receives security fixes until `0.3.0` is published, then becomes unsupported. |
+| `0.1.x` and older | No | Unsupported; upgrade to `0.2.x` today, or to `0.3.x` once it is published. |
 
-Only the newest patch of a supported minor line receives fixes. The wire format
-is unchanged between `0.2` and `0.3`, so upgrading is a package change rather
-than a protocol migration for plaintext payloads up to 1 MiB. See
+Only the newest patch of a supported line receives fixes. **`0.3.0` is not yet
+published; `0.2.x` receives security fixes until it is.** The wire format is
+unchanged between `0.2` and `0.3`, so upgrading is a package change rather than
+a protocol migration for plaintext payloads up to 1 MiB. See
 [Version compatibility](README.md#version-compatibility).
 
 The demo deployment at `qr-stream.digitalerror.xyz` tracks `main`. Reports about

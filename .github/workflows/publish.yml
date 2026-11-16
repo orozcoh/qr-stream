@@ -65,6 +65,7 @@ jobs:
       - name: Verify branch, version, and changelog
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
+          DIST_TAG: ${{ inputs.dist_tag }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
@@ -82,7 +83,7 @@ jobs:
             exit 1
           fi
           echo "### Publishing @orozcoh/qr-stream@$version" >> "$GITHUB_STEP_SUMMARY"
-          echo "dist-tag: \`${{ inputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "dist-tag: \`${DIST_TAG}\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Lint
         run: pnpm lint
