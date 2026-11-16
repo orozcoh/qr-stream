@@ -29,7 +29,7 @@ const DEFAULT_DARK: QrRgba = [0, 0, 0, 255];
 const DEFAULT_LIGHT: QrRgba = [255, 255, 255, 255];
 const DEFAULT_QUIET_ZONE = 4;
 
-interface ResolvedRasterOptions {
+export interface ResolvedRasterOptions {
   quietZone: number;
   dark: QrRgba;
   light: QrRgba;
@@ -60,7 +60,15 @@ function resolveColor(name: string, value: QrRgba | undefined, fallback: QrRgba)
   return value;
 }
 
-function resolveOptions(options: number | RasterOptions | undefined): ResolvedRasterOptions {
+/**
+ * Validate raster options and fill in defaults.
+ *
+ * Exported for the browser renderer, which must reject bad options when the
+ * controller is created: the paint loop deliberately swallows per-frame
+ * errors, so validation deferred to `matrixToRGBA` would leave the canvas
+ * blank without ever telling the host. Not part of the public `qr` barrel.
+ */
+export function resolveRasterOptions(options: number | RasterOptions | undefined): ResolvedRasterOptions {
   if (typeof options === 'number') {
     return { quietZone: resolveQuietZone(options), dark: DEFAULT_DARK, light: DEFAULT_LIGHT };
   }
@@ -93,7 +101,7 @@ export function matrixToRGBA(matrix: QrMatrix, scale: number, options?: number |
     throw new QrStreamError('INVALID_SCALE', `scale must be a positive integer, got ${scale}`);
   }
 
-  const { quietZone, dark, light } = resolveOptions(options);
+  const { quietZone, dark, light } = resolveRasterOptions(options);
   const modules = matrix.size + quietZone * 2;
   const width = modules * scale;
   const height = width;

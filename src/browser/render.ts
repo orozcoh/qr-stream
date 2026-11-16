@@ -2,7 +2,7 @@ import { QrStreamError, RenderError } from '../core/errors.js';
 import { PRESETS } from '../core/types.js';
 import type { QrStreamWriter } from '../core/writer.js';
 import { packetToMatrix } from '../qr/matrix.js';
-import { matrixToRGBA, type RasterOptions } from '../qr/raster.js';
+import { matrixToRGBA, resolveRasterOptions, type RasterOptions } from '../qr/raster.js';
 
 /**
  * Snap a requested frame rate to a divisor of the display refresh rate.
@@ -132,6 +132,9 @@ export function renderQrStream(options: RenderOptions): RenderController {
   if (size !== undefined && (!Number.isFinite(size) || size <= 0)) {
     throw new QrStreamError('INVALID_ARGUMENT', `size must be a positive finite number, got ${size}`);
   }
+  // The paint loop catches per-frame errors, so bad colors must be rejected
+  // here or the host would get a permanently blank canvas instead of a code.
+  resolveRasterOptions(colors);
   const refreshHz = options.refreshHz ?? 60;
   const context = canvas.getContext('2d');
   if (context === null) throw new RenderError('canvas 2d context unavailable');

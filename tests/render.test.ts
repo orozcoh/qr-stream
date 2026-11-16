@@ -268,8 +268,8 @@ describe('renderQrStream size and colors', () => {
     controller.stop();
   });
 
-  test('rejects a non-positive or non-finite size', () => {
-    const { canvas } = installRenderMocks();
+  test('rejects a non-positive or non-finite size before painting', () => {
+    const { context, canvas } = installRenderMocks();
 
     for (const size of [0, -10, Number.NaN, Number.POSITIVE_INFINITY]) {
       const error = catchError(() =>
@@ -279,6 +279,72 @@ describe('renderQrStream size and colors', () => {
       expect(error).toBeInstanceOf(QrStreamError);
       expect((error as QrStreamError).code).toBe('INVALID_ARGUMENT');
     }
+
+    expect(context.drawImage).not.toHaveBeenCalled();
+  });
+
+  test('rejects invalid colors before painting', () => {
+    const { context, canvas } = installRenderMocks();
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const error = catchError(() =>
+      renderQrStream({
+        packets: packets(),
+        canvas,
+        fps: 15,
+        version: 20,
+        colors: { dark: [256, 0, 0, 255] },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(QrStreamError);
+    expect((error as QrStreamError).code).toBe('INVALID_ARGUMENT');
+    expect(context.drawImage).not.toHaveBeenCalled();
+  });
+
+  test('rejects an invalid quiet zone before painting', () => {
+    const { context, canvas } = installRenderMocks();
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const error = catchError(() =>
+      renderQrStream({
+        packets: packets(),
+        canvas,
+        fps: 15,
+        version: 20,
+        colors: { quietZone: 2.5 },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(QrStreamError);
+    expect((error as QrStreamError).code).toBe('INVALID_ARGUMENT');
+    expect(context.drawImage).not.toHaveBeenCalled();
+  });
+
+  test('valid default colors still paint', async () => {
+    const { context, canvas, step } = installRenderMocks();
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const controller = renderQrStream({ packets: packets(), canvas, fps: 15, version: 20 });
+    controller.play();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    step(1);
+    step(100);
+
+    expect(context.drawImage).toHaveBeenCalled();
+    const image = context.putImageData.mock.calls[0]?.[0] as FakeImageData | undefined;
+    expect(Array.from(image!.data.slice(0, 4))).toEqual([255, 255, 255, 255]);
+
+    controller.stop();
   });
 
   test('colors reach the rasterizer', async () => {
