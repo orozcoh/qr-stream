@@ -6,3 +6,6 @@ allowBuilds:
 onlyBuiltDependencies:
   - esbuild
   - workerd
+packages:
+  - '.'
+  - 'tests/react18-runtime'

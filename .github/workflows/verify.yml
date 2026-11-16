@@ -59,6 +59,9 @@ jobs:
       - name: Build library
         run: pnpm build
 
+      - name: Test React 18 runtime
+        run: pnpm --filter @orozcoh/qr-stream-react18 test
+
       - name: Check API report
         run: pnpm api:check
 

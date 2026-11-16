@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.{ts,tsx}'],
+    // The React 18 runtime workspace has its own Vitest config and `.spec.tsx`
+    // files, so the root suite neither runs nor resolves it.
+    exclude: ['tests/react18-runtime/**'],
     reporters: ['default'],
     coverage: {
       provider: 'v8',

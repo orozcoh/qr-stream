@@ -89,6 +89,15 @@ export default tseslint.config(
     },
   },
   {
+    files: ['tests/react18-runtime/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        project: './tests/react18-runtime/tsconfig.json',
+        tsconfigRootDir: rootDir,
+      },
+    },
+  },
+  {
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
     },
