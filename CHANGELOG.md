@@ -1,5 +1,65 @@
 # Changelog
 
+## 1.0.0-rc.1 — 2026-11-16
+
+**Release candidate; no new features after this point.** This is a pre-release:
+it is published under the `next` dist-tag and `latest` still resolves to `0.2.0`
+until the final `1.0.0` publish. The public API is frozen as documented in
+`etc/*.api.md`; only regressions and contract gaps may change before `1.0.0`.
+
+### 1.0 feature surface (from 0.3.0)
+
+- React 18 support (`>=18` peer range) with a dedicated React 18 typecheck and
+  runtime fixture.
+- One typed error surface: stable `QrStreamErrorCode`s and `QrStreamError`
+  subclasses (`PayloadTooLargeError`, `WrongKeyError`, `CameraError`,
+  `DecoderError`, `RenderError`), each with a `recovery` hint, plus
+  `isQrStreamError`.
+- `QrStreamWriter` introspection (`version`, `preset`, `plainBytes`,
+  `wireBytes`, `payloadBytes`, `encrypted`) and `renderQrStream({ writer })`.
+- Wire-based limits: `MAX_WIRE_BYTES` (1 MiB compressed body),
+  `MAX_INPUT_BYTES` (8 MiB raw input), `MAX_DECODED_BYTES` (8 MiB decoded), and
+  per-call `limits` that may only tighten the defaults.
+- Camera lifecycle on `useCameraReader`: `start()`, `stop()`, `enabled`,
+  `starting`, `torch`, `torchSupported`, and `setTorch()`, with camera failures
+  surfaced as typed errors.
+- Packaged React components with `strings` overrides, a `formatError` prop, and
+  accessibility fixes (labelled preview and canvas, `role="alert"` errors,
+  progress announcements).
+- Colors and explicit `size` for `matrixToRGBA` / `renderQrStream`.
+- Guide set: API reference, `docs/integration.md`, `docs/migration-0.2-to-1.0.md`,
+  examples, and the demo PWA.
+
+### Hardening (0.4.0 milestone / 0.5.0 internal)
+
+The 0.5.0 milestone was internal only and was never published; its hardening
+lands in this RC.
+
+- Property-based fuzz tests for every peer-controlled parser (frame header,
+  metadata, varints, gzip budget, fountain parameters).
+- Interoperability fixtures for 0.2 streams and cross-version reader/sender
+  pairs.
+- Browser end-to-end coverage: sender rendering, camera lifecycle, and an
+  offline PWA receive.
+- Render benchmarks with enforced allocation and time budgets
+  (`pnpm bench:check`).
+- Committed API report (`etc/*.api.md`) checked in CI, so an API change cannot
+  merge silently.
+- TypeDoc API reference, buildable docs and examples.
+- FOSS infrastructure: `SECURITY.md`, `CONTRIBUTING.md`, release guide, CI
+  provenance publish workflow, and the accessibility/i18n checks.
+
+### Compatibility
+
+- The wire format is unchanged from 0.2. 0.2 and 1.0 exchange plaintext up to
+  1 MiB and encrypted streams in both directions. A 0.2 receiver rejects a 1.0
+  stream whose plaintext exceeds 1 MiB; set
+  `limits: { maxInputBytes: 1024 * 1024 }` on the sender for mixed-version
+  deployments. See
+  [Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility).
+- The package API changed from 0.2; there are no aliases. See
+  [Migrating from 0.2 to 1.0](docs/migration-0.2-to-1.0.md).
+
 ## 0.3.0 — 2026-11-16
 
 ### Added

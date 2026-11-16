@@ -14,14 +14,16 @@ what is explicitly out of scope, lives in
 
 | Version | Supported | Notes |
 | --- | --- | --- |
-| `0.3.x` | Not yet published | The 0.3.0 release is prepared in this repository but is not on npm; `npm view` still resolves `latest` to `0.2.0`. |
-| `0.2.x` | Yes, until `0.3.0` ships | The registry's current `latest`. Receives security fixes until `0.3.0` is published, then becomes unsupported. |
-| `0.1.x` and older | No | Unsupported; upgrade to `0.2.x` today, or to `0.3.x` once it is published. |
+| `1.0.0-rc.1` | Pre-release, receives fixes | Published under the `next` dist-tag as a release candidate. `npm view @orozcoh/qr-stream version` still reports `0.2.0` for `latest` until the final `1.0.0` publish. |
+| `0.2.x` | Yes, until `1.0.0` ships | The registry's current `latest`. Receives security fixes until `1.0.0` is published, then becomes unsupported. |
+| `0.3.0` | Never published | An internal milestone that never reached npm; use `1.0.0-rc.1` instead. |
+| `0.1.x` and older | No | Unsupported; upgrade to `0.2.x` today, or to `1.0.0-rc.1` for the release candidate. |
 
-Only the newest patch of a supported line receives fixes. **`0.3.0` is not yet
-published; `0.2.x` receives security fixes until it is.** The wire format is
-unchanged between `0.2` and `0.3`, so upgrading is a package change rather than
-a protocol migration for plaintext payloads up to 1 MiB. See
+Only the newest patch of a supported line receives fixes. **`1.0.0-rc.1` is a
+pre-release and `0.2.x` is still the registry's `latest`; both receive security
+fixes until the final `1.0.0` is published.** The wire format is unchanged
+between `0.2` and `1.0`, so upgrading is a package change rather than a protocol
+migration for plaintext payloads up to 1 MiB. See
 [Version compatibility](README.md#version-compatibility).
 
 The demo deployment at `qr-stream.digitalerror.xyz` tracks `main`. Reports about

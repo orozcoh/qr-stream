@@ -158,6 +158,11 @@ One-time setup:
   npm fails `E401` before it ever attempts the OIDC exchange. Trusted publishing
   needs no `_authToken` line at all. The `id-token: write` permission is
   required either way.
+- Trusted publishing requires **npm >= 11.5.1 (Node >= 22.14)**. The workflow
+  pins `node-version: 22`, whose bundled npm is older than that, so add
+  `npm install -g npm@latest` before the publish step, or invoke
+  `npx npm@latest publish ...`. Without a current npm the OIDC exchange is not
+  attempted and the publish fails before any upload.
 
 `dry_run` defaults to **true**, so the first dispatch packs and reports without
 uploading:

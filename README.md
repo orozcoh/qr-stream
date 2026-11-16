@@ -156,13 +156,21 @@ decoder: it returns text, and a packet is binary. See [Decoders](#decoders).
 
 ## Version compatibility
 
-| Version | React peer | Wire compatibility |
-| --- | --- | --- |
-| `0.3.0` | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
-| `0.2.0` | `>=19` | Reads `0.3.0` plaintext ≤1 MiB; encrypted streams are not readable by `0.1.x`. |
+| Version | Status | React peer | Wire compatibility |
+| --- | --- | --- | --- |
+| `1.0.0-rc.1` | Pre-release (`next` dist-tag; not `latest`) | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
+| `0.3.0` | Never published | `>=18` | Internal milestone with the same wire format; use `1.0.0-rc.1`. |
+| `0.2.0` | Registry `latest` until `1.0.0` ships | `>=19` | Reads 1.0 plaintext ≤1 MiB; encrypted streams are not readable by `0.1.x`. |
 
-`0.3.0` keeps the same wire format and moves the payload budgets to the
-raw/wire/decoded split described in [Limits](#limits). A `0.3.0` stream is
+`1.0.0-rc.1` is a release candidate, not the final release. It is published
+under the `next` dist-tag; `npm install @orozcoh/qr-stream` still resolves
+`latest` to `0.2.0` until `1.0.0` is published. The draft notes are the
+[`1.0.0-rc.1` changelog section](CHANGELOG.md#1000-rc1--2026-11-16), and the
+release procedure is in [docs/release.md](docs/release.md). `0.3.0` was an
+internal milestone and was never published.
+
+`1.0.0-rc.1` keeps the same wire format and moves the payload budgets to the
+raw/wire/decoded split described in [Limits](#limits). An RC stream is
 readable by a `0.2.0` receiver for plaintext up to 1 MiB; set
 `limits: { maxInputBytes: 1024 * 1024 }` on the sender if every transfer must
 stay readable by an older device. See
