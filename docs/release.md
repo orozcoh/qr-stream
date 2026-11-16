@@ -149,10 +149,10 @@ refuses a version that does not match both `package.json` and `CHANGELOG.md`.
 One-time setup:
 
 - Configure npm **trusted publishing** for this repository on npmjs.com:
-  organization `orozcoh`, repository `qr-stream`, workflow `publish.yml`. If
-  the npm entry names an environment, add the same `environment:` to the job;
-  the current workflow leaves it out, so leave the npm environment blank or
-  update both together.
+  organization `orozcoh`, repository `qr-stream`, workflow `publish.yml`,
+  environment **`npm-release`**. The workflow targets the same GitHub
+  environment; a mismatch fails the OIDC exchange. Keep `production` for the
+  Cloudflare demo deploy; it is not the npm publish gate.
 - Leave the workflow's `permissions` alone: `contents: read` plus
   `id-token: write`. The OIDC identity is what Sigstore uses to attest the
   tarball.
