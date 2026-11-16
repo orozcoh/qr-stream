@@ -353,12 +353,13 @@ test('the receiver renders sentinel camera, switch, zoom, and torch copy', async
   expectNoDefaultCopy(switching.innerHTML);
 });
 
-test('a camera failure renders the sentinel placeholder', async () => {
+test('a camera failure renders the sentinel placeholder and retry action', async () => {
   h.camera.error = new CameraError('CAMERA_UNAVAILABLE', 'The camera could not be opened.');
   const strings = sentinelStrings();
 
   const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
-  expectSentinels(view.innerHTML, ['cameraUnavailable']);
+  expectSentinels(view.innerHTML, ['cameraUnavailable', 'tryAgain']);
+  expect([...view.querySelectorAll('button')].map((node) => node.textContent)).toContain(sentinelValue('tryAgain'));
   expectNoDefaultCopy(view.innerHTML);
 });
 
@@ -498,6 +499,12 @@ test('axe: the receiver wrong-key panel has no violations', async () => {
 
 test('axe: the completed receiver render has no violations', async () => {
   h.reader.result = { data: new Uint8Array([1, 2, 3]), meta: { filename: 'report.json' } };
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  await expectNoAxeViolations(view);
+});
+
+test('axe: a recoverable camera failure render has no violations', async () => {
+  h.camera.error = new CameraError('CAMERA_PERMISSION_DENIED', 'Camera permission was denied.');
   const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
   await expectNoAxeViolations(view);
 });

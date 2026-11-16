@@ -17,6 +17,8 @@ const TABLE = (() => {
  *
  * Pass a previous result as `seed` to continue a checksum across several
  * buffers: `crc32(b, crc32(a)) === crc32(concat(a, b))`.
+ *
+ * @internal
  */
 export function crc32(bytes: Uint8Array, seed = 0): number {
   let crc = (seed ^ 0xffffffff) >>> 0;

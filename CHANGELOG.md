@@ -11,7 +11,7 @@ gaps may change before `1.0.0`.
 Field validation (two-device matrix + one-week pilot) is pending; no 1.0.0
 final claim.
 
-### 1.0 feature surface (from 0.3.0)
+### 1.0 feature surface
 
 - React 18 support (`>=18` peer range) with a dedicated React 18 typecheck and
   runtime fixture.
@@ -55,13 +55,17 @@ lands in this RC.
 
 ### Compatibility
 
-- The wire format is unchanged from 0.2. 0.2 and 1.0 exchange plaintext up to
-  1 MiB and encrypted streams in both directions. A 0.2 receiver rejects a 1.0
-  stream whose plaintext exceeds 1 MiB; set
+- The wire format and encryption format are unchanged from 0.2. 0.2 and 1.0
+  exchange plaintext up to 1 MiB in both directions, encrypted streams
+  included; 0.2 still enforces its 1 MiB plaintext cap on encrypted input. A 0.2
+  receiver rejects a 1.0 stream whose plaintext exceeds 1 MiB; set
   `limits: { maxInputBytes: 1024 * 1024 }` on the sender for mixed-version
   deployments. See
   [Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility).
-- The package API changed from 0.2; there are no aliases. See
+- The package API changed from 0.2; there are no aliases. The root entry is the
+  transfer surface (writer, reader, limits, typed errors); packet, fountain,
+  crypto, metadata, varint, PRNG, and CRC-32 helpers are internal and absent
+  from `etc/*.api.md`. See
   [Migrating from 0.2 to 1.0](docs/migration-0.2-to-1.0.md).
 
 ## 0.3.0 — 2026-11-16
@@ -105,13 +109,13 @@ milestone; 0.3.0 never reached npm and `1.0.0-rc.1` supersedes it.
 - `readQrStream` setup failures reject with `CameraError` (the original
   `DOMException` is in `cause`) instead of the raw `DOMException`.
 - `MAX_INPUT_BYTES` now documents the 8 MiB raw-input budget instead of acting
-  as the 1 MiB wire cap; `MAX_WIRE_BYTES` is the transfer budget.
+  as the 1 MiB raw-input cap; `MAX_WIRE_BYTES` is the transfer budget.
 
 ### Compatibility
 
-- The wire format is unchanged. 0.2 and 0.3 exchange plaintext up to 1 MiB and
-  encrypted streams in both directions.
-- A 0.2 receiver rejects a 0.3 stream whose plaintext exceeds 1 MiB; set
+- The wire format is unchanged. 0.2 and 1.0 exchange plaintext up to 1 MiB and
+  encrypted streams in both directions, subject to 0.2's 1 MiB plaintext cap.
+- A 0.2 receiver rejects a 1.0 stream whose plaintext exceeds 1 MiB; set
   `limits: { maxInputBytes: 1024 * 1024 }` on the sender for mixed-version
   deployments. See
   [Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility).

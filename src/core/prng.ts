@@ -3,6 +3,8 @@
  *
  * Sender and receiver must derive identical symbol sets without transmitting
  * them, so this may never use floating point.
+ *
+ * @internal
  */
 export function splitmix32(seed: number): () => number {
   let state = seed >>> 0;
@@ -28,6 +30,8 @@ export function splitmix32(seed: number): () => number {
  * no rank. Dense subsets cost peeling efficiency — the decoder falls through
  * to Gaussian elimination — but `k` is at most a few hundred here, so that
  * elimination is cheap and the transfer completes.
+ *
+ * @internal
  */
 export function symbolIndices(sessionId: number, symbolIdx: number, k: number): number[] {
   if (symbolIdx < k) return [symbolIdx];

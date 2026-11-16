@@ -117,6 +117,26 @@ describe('renderQrStream stop', () => {
     controller.play();
     expect(rafCallCount()).toBe(calls);
   });
+
+  test('tolerates a rejecting iterator return', async () => {
+    const { canvas } = installRenderMocks();
+    const packets: AsyncIterable<Uint8Array> = {
+      [Symbol.asyncIterator]: () => ({
+        next: async () => ({ value: new Uint8Array(20), done: false }),
+        // A host generator may reject on early close. `stop()` must swallow it:
+        // it is a teardown path with no caller to observe an exception.
+        return: () => Promise.reject(new Error('closed badly')),
+      }),
+    };
+
+    const controller = renderQrStream({ packets, canvas, fps: 15, version: 20 });
+    controller.play();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(() => controller.stop()).not.toThrow();
+    // Let the rejection settle; an unhandled rejection would fail the suite.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 });
 
 describe('renderQrStream writer mode', () => {

@@ -48,6 +48,19 @@ export interface CameraDiagnostics {
 }
 
 // @public (undocumented)
+export class CameraError extends QrStreamError {
+    constructor(code: CameraErrorCode, message: string, options?: QrStreamErrorOptions);
+}
+
+// @public
+export type CameraErrorCode = Extract<QrStreamErrorCode, 'CAMERA_PERMISSION_DENIED' | 'CAMERA_NOT_FOUND' | 'CAMERA_IN_USE' | 'CAMERA_UNAVAILABLE' | 'CAMERA_CONSTRAINTS_FAILED' | 'TORCH_UNSUPPORTED' | 'DECODER_FAILED'>;
+
+// @public (undocumented)
+export class DecoderError extends QrStreamError {
+    constructor(message: string, options?: QrStreamErrorOptions);
+}
+
+// @public (undocumented)
 export const DEFAULT_QR_STREAM_STRINGS: Readonly<QrStreamStrings>;
 
 // @public
@@ -88,6 +101,9 @@ export interface FrameDecoder {
     decode(image: ImageData): Promise<Uint8Array | null>;
     dispose?(): void;
 }
+
+// @public (undocumented)
+export function isQrStreamError(value: unknown): value is QrStreamError;
 
 // @public
 export type PayloadScope = 'input' | 'wire' | 'decoded';
@@ -247,6 +263,7 @@ export interface QrStreamStrings {
     torchOff: string;
     // (undocumented)
     torchOn: string;
+    tryAgain: string;
     // (undocumented)
     unlock: string;
     // (undocumented)
@@ -290,6 +307,11 @@ export interface QrVideoRef {
 export interface ReaderLimits {
     maxDecodedBytes?: number;
     maxWireBytes?: number;
+}
+
+// @public (undocumented)
+export class RenderError extends QrStreamError {
+    constructor(message: string, options?: QrStreamErrorOptions);
 }
 
 // @public (undocumented)

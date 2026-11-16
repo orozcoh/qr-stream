@@ -12,11 +12,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json-summary', 'lcov'],
       include: ['src/**/*.{ts,tsx}'],
-      // Baseline floor measured 2026-11-16: 76.17% lines, 61.01% branches.
-      // Raise toward 80% before the 1.0 release.
+      // Floor measured 2026-11-16 after the 1.0 RC fix wave: 93.91% lines,
+      // 84.26% branches. The thresholds keep headroom below the measurement
+      // while still blocking a real coverage regression.
       thresholds: {
-        lines: 76,
-        branches: 61,
+        lines: 92,
+        branches: 82,
       },
     },
   },

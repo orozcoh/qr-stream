@@ -4,7 +4,7 @@ import { DEFAULT_ITERATIONS, NONCE_BYTES, SALT_BYTES, encryptBytes } from './cry
 import { PayloadTooLargeError, QrStreamError, isQrStreamError } from './errors.js';
 import { encodeSymbol } from './fountain.js';
 import { GCM_TAG_BYTES, MAX_META_OVERHEAD, resolveTransferLimits } from './limits.js';
-import { encodeMeta, sanitizeFilename, writeVarint, type StreamMeta } from './meta.js';
+import { encodeMeta, normalizeFilename, writeVarint, type StreamMeta } from './meta.js';
 import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet.js';
 import { FRAME_OVERHEAD, PRESETS, type PresetName, type TransferLimits } from './types.js';
 
@@ -119,7 +119,7 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
   const nonce = hasKey ? randomBytes(api, NONCE_BYTES) : undefined;
 
   const meta: StreamMeta = {
-    filename: sanitizeFilename(options.filename),
+    filename: normalizeFilename(options.filename),
     plainLen: data.length,
     wireLen: compressed.data.length,
     sha256: digest,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { estimateTransferSeconds, quantizeFps, renderQrStream, type RenderController } from '../browser/render.js';
-import type { QrStreamError } from '../core/errors.js';
+import { QrStreamError, RenderError } from '../core/errors.js';
 import { MAX_INPUT_BYTES, PRESETS, type PresetName, type TransferLimits } from '../core/types.js';
 import { ErrorText } from './ErrorText.js';
 import { describeAcceptTypes, matchesAccept } from './file-accept.js';
@@ -69,6 +69,11 @@ export function QrStreamSender({
   const [fps, setFps] = useState(PRESETS.balanced.fps);
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [localError, setLocalError] = useState<QrStreamError | null>(null);
+  // The live controller is created once per writer; a frame-rate change is a
+  // controller setting, not a reason to rebuild the stream.
+  const fpsRef = useRef(fps);
+  fpsRef.current = fps;
 
   const text = resolveQrStreamStrings(strings);
 
@@ -96,17 +101,32 @@ export function QrStreamSender({
   const start = useCallback(() => {
     if (!writer || !canvasRef.current) return;
     controllerRef.current?.stop();
+    controllerRef.current = null;
 
-    controllerRef.current = renderQrStream({
-      writer,
-      canvas: canvasRef.current,
-      fps,
-    });
-    controllerRef.current.play();
+    let controller: RenderController;
+    try {
+      controller = renderQrStream({
+        writer,
+        canvas: canvasRef.current,
+        fps: fpsRef.current,
+      });
+      controller.play();
+    } catch (cause) {
+      // A failed paint must not leave the UI claiming a stream is running (or
+      // reject an onClick handler the host never awaits).
+      runningRef.current = false;
+      setRunning(false);
+      onRunningChangeRef.current?.(false);
+      setLocalError(new RenderError('The QR display could not start.', { cause, recovery: 'retry' }));
+      return;
+    }
+
+    controllerRef.current = controller;
     runningRef.current = true;
     setRunning(true);
+    setLocalError(null);
     onRunningChangeRef.current?.(true);
-  }, [fps, writer]);
+  }, [writer]);
 
   useEffect(() => stop, [stop]);
 
@@ -136,6 +156,7 @@ export function QrStreamSender({
 
   const pickFile = async (file: File | undefined): Promise<void> => {
     if (!file) return;
+    setLocalError(null);
 
     if (!matchesAccept(file, accept)) {
       setNotice({ kind: 'fileTypeRejected', values: { name: file.name } });
@@ -153,7 +174,17 @@ export function QrStreamSender({
 
     setNotice(null);
     setFilename(file.name);
-    setData(new Uint8Array(await file.arrayBuffer()));
+    try {
+      setData(new Uint8Array(await file.arrayBuffer()));
+    } catch (cause) {
+      setData(null);
+      setLocalError(
+        new QrStreamError('COMPRESSION_FAILED', 'The file could not be read.', {
+          cause,
+          recovery: 'retry',
+        }),
+      );
+    }
   };
 
   const estimate = writer ? formatEstimate(estimateTransferSeconds(writer.k, quantizeFps(fps))) : '';
@@ -251,7 +282,7 @@ export function QrStreamSender({
         </div>
       )}
 
-      <ErrorText error={error} {...(formatError ? { formatError } : {})} />
+      <ErrorText error={localError ?? error} {...(formatError ? { formatError } : {})} />
       {noticeText ? (
         <p className="qrs__error" role="alert">
           {noticeText}

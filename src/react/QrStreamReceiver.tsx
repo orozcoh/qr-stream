@@ -11,6 +11,14 @@ import { useQrStreamReader } from './useQrStreamReader.js';
 
 ensureQrStreamStyles();
 
+/** Recoveries where reopening the camera is a meaningful next action. */
+const CAMERA_RETRY_RECOVERIES: ReadonlySet<QrStreamError['recovery']> = new Set([
+  'retry',
+  'grant-permission',
+  'change-camera',
+  'upgrade-browser',
+]);
+
 export interface QrStreamReceiverProps {
   /** Optional heading above the camera feed. */
   title?: string;
@@ -58,6 +66,7 @@ export function QrStreamReceiver({
     select,
     cycle,
     rescan,
+    start,
     switching,
     error: cameraError,
     diagnostics,
@@ -122,6 +131,12 @@ export function QrStreamReceiver({
         <video ref={videoRef} className="qrs__video" playsInline muted aria-label={text.cameraPreview} />
         {cameraError ? <span className="qrs__placeholder">{text.cameraUnavailable}</span> : null}
       </div>
+
+      {cameraError && CAMERA_RETRY_RECOVERIES.has(cameraError.recovery) ? (
+        <button type="button" className="qrs__button" onClick={() => void start()}>
+          {text.tryAgain}
+        </button>
+      ) : null}
 
       {showSwitch ? (
         <button

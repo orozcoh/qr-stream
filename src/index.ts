@@ -1,4 +1,13 @@
-export * from './core/types.js';
+export {
+  MAX_DECODED_BYTES,
+  MAX_INPUT_BYTES,
+  MAX_WIRE_BYTES,
+  PRESETS,
+  type Preset,
+  type PresetName,
+  type ReaderLimits,
+  type TransferLimits,
+} from './core/types.js';
 export {
   CameraError,
   DecoderError,
@@ -13,13 +22,8 @@ export {
   type QrStreamErrorOptions,
   type QrStreamRecovery,
 } from './core/errors.js';
-export { crc32 } from './core/crc32.js';
-export { encodePacket, decodePacket, MAGIC, FLAG_GZIP, FLAG_ENCRYPTED, type Packet } from './core/packet.js';
-export { splitmix32, symbolIndices } from './core/prng.js';
-export { encodeSymbol, FountainDecoder } from './core/fountain.js';
 export { gzipIfSmaller, gunzip } from './core/compress.js';
-export { encryptBytes, decryptBytes, DEFAULT_ITERATIONS, type EncryptOptions } from './core/crypto.js';
-export { encodeMeta, decodeMeta, readVarint, writeVarint, type StreamMeta } from './core/meta.js';
+export type { StreamMeta } from './core/meta.js';
 export { createQrStreamWriter, type WriterOptions, type QrStreamWriter } from './core/writer.js';
 export {
   createQrStreamReader,

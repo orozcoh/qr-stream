@@ -53,6 +53,20 @@ function invalidMetadata(message: string): QrStreamError {
   return new QrStreamError('INVALID_METADATA', message, { recovery: 'rescan' });
 }
 
+/**
+ * Sanitized and byte-truncated filename, exactly as the receiver will save it.
+ *
+ * @internal
+ */
+export function normalizeFilename(name: string): string {
+  return new TextDecoder().decode(truncateUtf8(sanitizeFilename(name), MAX_FILENAME_BYTES));
+}
+
+/**
+ * Encode a varint.
+ *
+ * @internal
+ */
 export function writeVarint(value: number): Uint8Array {
   const out: number[] = [];
   let rest = value;
@@ -65,6 +79,11 @@ export function writeVarint(value: number): Uint8Array {
   return Uint8Array.from(out);
 }
 
+/**
+ * Read one canonical varint.
+ *
+ * @internal
+ */
 export function readVarint(bytes: Uint8Array, offset: number): { value: number; next: number } {
   let value = 0;
   let shift = 1;
@@ -84,8 +103,13 @@ export function readVarint(bytes: Uint8Array, offset: number): { value: number; 
   return { value, next: cursor };
 }
 
+/**
+ * Encode the metadata block.
+ *
+ * @internal
+ */
 export function encodeMeta(meta: StreamMeta): Uint8Array {
-  const filename = truncateUtf8(sanitizeFilename(meta.filename), MAX_FILENAME_BYTES);
+  const filename = new TextEncoder().encode(normalizeFilename(meta.filename));
   const salt = meta.salt ?? new Uint8Array(0);
   const nonce = meta.nonce ?? new Uint8Array(0);
 
@@ -127,6 +151,11 @@ export function encodeMeta(meta: StreamMeta): Uint8Array {
   return out;
 }
 
+/**
+ * Decode and validate a metadata block.
+ *
+ * @internal
+ */
 export function decodeMeta(bytes: Uint8Array): StreamMeta {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let offset = 0;

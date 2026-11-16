@@ -282,7 +282,13 @@ export function renderQrStream(options: RenderOptions): RenderController {
       running = false;
       cancelAnimationFrame(frameHandle);
       queue.length = 0;
-      void iterator.return?.(undefined);
+      try {
+        // A host iterator may reject on early close; that is not a render
+        // failure, and an unhandled rejection at camera frame rate is noise.
+        void iterator.return?.(undefined)?.catch(() => undefined);
+      } catch {
+        // A synchronous close failure is equally harmless here.
+      }
       // Remove the last painted QR. A stopped controller must not leave a
       // scannable frame on screen, especially when K=1 carries the whole file.
       context.clearRect(0, 0, canvas.width, canvas.height);

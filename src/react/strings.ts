@@ -35,6 +35,8 @@ export interface QrStreamStrings {
   densityOption: string;
   cameraPreview: string;
   cameraUnavailable: string;
+  /** Retry action for a camera failure the host can recover from. */
+  tryAgain: string;
   switchCamera: string;
   switching: string;
   camera: string;
@@ -86,6 +88,7 @@ export const DEFAULT_QR_STREAM_STRINGS: Readonly<QrStreamStrings> = Object.freez
   densityOption: '{name} — v{version}',
   cameraPreview: 'Camera preview',
   cameraUnavailable: 'Camera unavailable',
+  tryAgain: 'Try again',
   switchCamera: 'Switch camera',
   switching: 'Switching…',
   camera: 'Camera',

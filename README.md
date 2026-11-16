@@ -159,7 +159,6 @@ decoder: it returns text, and a packet is binary. See [Decoders](#decoders).
 | Version | Status | React peer | Wire compatibility |
 | --- | --- | --- | --- |
 | `1.0.0-rc.1` | Pre-release (publish pending to `next`; not `latest`) | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
-| `0.3.0` | Never published | `>=18` | Internal milestone with the same wire format; use `1.0.0-rc.1`. |
 | `0.2.0` | Registry `latest` until `1.0.0` ships | `>=19` | Reads 1.0 plaintext ≤1 MiB; encrypted streams are not readable by `0.1.x`. |
 
 `1.0.0-rc.1` is a release candidate, not the final release. It **will be
@@ -167,12 +166,14 @@ published** under the `next` dist-tag; publication is pending, and
 `npm install @orozcoh/qr-stream` still resolves `latest` to `0.2.0` until
 `1.0.0` is published. The draft notes are the
 [`1.0.0-rc.1` changelog section](CHANGELOG.md#100-rc1--2026-11-16), and the
-release procedure is in [docs/release.md](docs/release.md). `0.3.0` was an
-internal milestone and was never published.
+release procedure is in [docs/release.md](docs/release.md). The intermediate
+internal milestones never reached npm.
 
 `1.0.0-rc.1` keeps the same wire format and moves the payload budgets to the
-raw/wire/decoded split described in [Limits](#limits). An RC stream is
-readable by a `0.2.0` receiver for plaintext up to 1 MiB; set
+raw/wire/decoded split described in [Limits](#limits). An RC stream is readable
+by a `0.2.0` receiver when the plaintext is at most 1 MiB — for encrypted and
+unencrypted transfers alike. The encryption format did not change, but 0.2's
+1 MiB plaintext cap still applies to any encrypted stream it receives. Set
 `limits: { maxInputBytes: 1024 * 1024 }` on the sender if every transfer must
 stay readable by an older device. See
 [Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility).
@@ -529,14 +530,27 @@ devices work with no network at all.
 
 ## Release
 
-Two phases, both behind an auth preflight (`gh` must be the repo owner and
-`npm whoami` must succeed):
+Release candidates publish to the `next` dist-tag, never `latest`. Every step
+is behind an auth preflight (`gh` must be the repo owner and `npm whoami` must
+succeed):
 
 ```bash
 pnpm release:check   # read-only: auth, branch, sync, version, tag, npm, release
-pnpm release:prepare 1.0.0-rc.1   # bump, changelog check, tests, PR, verify, merge
-pnpm release:publish         # tag, npm publish, GitHub release, smoke test
+
+# RC path: the signed provenance workflow, with the `next` dist-tag.
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=true
+gh run watch --repo orozcoh/qr-stream
+# green dry run, then the real upload:
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=false
+
+# The CI job publishes only; finish the tag, GitHub release, and smoke test:
+pnpm release:publish --resume
 ```
+
+A local upload is the unsigned alternative, with no provenance attestation:
+`pnpm release:publish --tag next --yes`. Never omit `--tag next` for an RC.
 
 The full procedure — the authoritative CI gate, the `publish.yml` provenance
 path, the demo deploy, and rollback — is in [docs/release.md](docs/release.md).
@@ -557,7 +571,8 @@ identity that a laptop does not have.
 - `release:prepare` waits for the deploy run; if GitHub misses the push event,
   it dispatches `deploy.yml` from `main` instead of silently skipping the
   deploy check.
-- For a 2FA account: `NPM_OTP=123456 pnpm release:publish`.
+- For a 2FA account, prefix the local publish with `NPM_OTP=123456`; add
+  `--tag next` for an RC (`NPM_OTP=123456 pnpm release:publish --tag next --yes`).
 
 The repo’s `main` ruleset requires a PR and the `verify` check, so
 `release:prepare` merges only after CI passes.
@@ -591,9 +606,11 @@ subpath exports are checked statically against the tarball.
   the writer, and `limits.maxWireBytes` / `limits.maxDecodedBytes` on the
   reader, may lower a default but never raise it. A limit that is not a positive
   integer at or below the hard ceiling is rejected with `INVALID_ARGUMENT`.
-- **0.2 interop:** the wire format is unchanged. A 0.3 stream is readable by a
-  0.2 receiver for plaintext up to 1 MiB. For a mixed-version fleet, opt down
-  with `limits: { maxInputBytes: 1024 * 1024 }` on the sender.
+- **0.2 interop:** the wire format and encryption format are unchanged. A 1.0
+  stream is readable by a 0.2 receiver for plaintext up to 1 MiB, encrypted or
+  not — 0.2 still enforces its 1 MiB plaintext cap on encrypted input. For a
+  mixed-version fleet, opt down with `limits: { maxInputBytes: 1024 * 1024 }`
+  on the sender.
 - **1 MiB on the wire is minutes, not seconds.** At the `fast` preset an
   incompressible megabyte is K = 1252 blocks, roughly 146 seconds of scanning at
   1.75x overhead. JSON compresses 3-8x, so a typical 1 MiB document finishes in

@@ -1,5 +1,10 @@
 import { WrongKeyError } from './errors.js';
 
+/**
+ * Default PBKDF2 iteration count, stored in the metadata block.
+ *
+ * @internal
+ */
 export const DEFAULT_ITERATIONS = 600_000;
 
 /**
@@ -38,6 +43,7 @@ async function deriveKey(passphrase: string, salt: Uint8Array, iterations: numbe
   );
 }
 
+/** @internal */
 export interface EncryptOptions {
   /** Reuse a salt generated before the metadata block was built. */
   salt?: Uint8Array;
@@ -53,6 +59,8 @@ export interface EncryptOptions {
  * Per-block encryption is not an option: a repair symbol is the XOR of several
  * ciphertext blocks, so the fountain decoder has to work on ciphertext and
  * decryption must happen after reconstruction.
+ *
+ * @internal
  */
 export async function encryptBytes(
   plain: Uint8Array,
@@ -72,6 +80,11 @@ export async function encryptBytes(
   return { ciphertext, salt, nonce, iterations };
 }
 
+/**
+ * Decrypt a reconstructed payload.
+ *
+ * @internal
+ */
 export async function decryptBytes(
   ciphertext: Uint8Array,
   passphrase: string,

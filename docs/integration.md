@@ -368,9 +368,9 @@ per-frame setting.
 
 ### 0.2 compatibility
 
-The wire format did not change in 0.3. A 0.3 stream is readable by a 0.2
+The wire format did not change in 1.0. A 1.0 stream is readable by a 0.2
 receiver when the plaintext is **at most 1 MiB**, because the compressed body is
-then at most 1 MiB and the decoded result stays under 0.2's cap. A 0.3 sender
+then at most 1 MiB and the decoded result stays under 0.2's cap. A 1.0 sender
 can accept up to 8 MiB of raw input as long as the compressed wire fits; a 0.2
 receiver rejects a decoded result over 1 MiB.
 
@@ -391,7 +391,9 @@ The React sender takes the same budgets as a prop:
 <QrStreamSender limits={{ maxInputBytes: 1024 * 1024 }} />
 ```
 
-Encrypted streams are unaffected by the limit change, but they are still not
+The encryption format is unchanged too, but the 1 MiB plaintext cap still
+applies to encrypted 0.2 streams: a 0.2 receiver cannot decrypt a 1.0 encrypted
+transfer whose plaintext exceeds 1 MiB. Encrypted streams are still not
 wire-compatible with `0.1.x` because of the metadata AAD added in `0.2.0`.
 
 ## 6. Error handling

@@ -16,78 +16,15 @@ export class CameraError extends QrStreamError {
 export type CameraErrorCode = Extract<QrStreamErrorCode, 'CAMERA_PERMISSION_DENIED' | 'CAMERA_NOT_FOUND' | 'CAMERA_IN_USE' | 'CAMERA_UNAVAILABLE' | 'CAMERA_CONSTRAINTS_FAILED' | 'TORCH_UNSUPPORTED' | 'DECODER_FAILED'>;
 
 // @public
-export function crc32(bytes: Uint8Array, seed?: number): number;
-
-// @public
 export function createQrStreamReader(options?: QrStreamReaderOptions): QrStreamReader;
 
 // @public
 export function createQrStreamWriter(data: Uint8Array, options: WriterOptions): Promise<QrStreamWriter>;
 
 // @public (undocumented)
-export function decodeMeta(bytes: Uint8Array): StreamMeta;
-
-// @public
-export function decodePacket(bytes: Uint8Array): Packet | null;
-
-// @public (undocumented)
 export class DecoderError extends QrStreamError {
     constructor(message: string, options?: QrStreamErrorOptions);
 }
-
-// @public (undocumented)
-export function decryptBytes(ciphertext: Uint8Array, passphrase: string, salt: Uint8Array, nonce: Uint8Array, iterations: number, additionalData?: Uint8Array): Promise<Uint8Array>;
-
-// @public (undocumented)
-export const DEFAULT_ITERATIONS = 600000;
-
-// @public (undocumented)
-export function encodeMeta(meta: StreamMeta): Uint8Array;
-
-// @public
-export function encodePacket(packet: Packet): Uint8Array;
-
-// @public
-export function encodeSymbol(blocks: Uint8Array[], sessionId: number, symbolIdx: number): Uint8Array;
-
-// @public
-export function encryptBytes(plain: Uint8Array, passphrase: string, iterations?: number, options?: EncryptOptions): Promise<{
-    ciphertext: Uint8Array;
-    salt: Uint8Array;
-    nonce: Uint8Array;
-    iterations: number;
-}>;
-
-// @public (undocumented)
-export interface EncryptOptions {
-    additionalData?: Uint8Array;
-    nonce?: Uint8Array;
-    salt?: Uint8Array;
-}
-
-// @public (undocumented)
-export const FLAG_ENCRYPTED = 2;
-
-// @public (undocumented)
-export const FLAG_GZIP = 1;
-
-// @public
-export class FountainDecoder {
-    constructor(k: number, blockSize: number, sessionId: number);
-    // (undocumented)
-    add(symbolIdx: number, payload: Uint8Array): void;
-    // (undocumented)
-    assemble(): Uint8Array | null;
-    // (undocumented)
-    get isComplete(): boolean;
-    // (undocumented)
-    get solvedCount(): number;
-    // (undocumented)
-    readonly sourceCount: number;
-}
-
-// @public
-export const FRAME_OVERHEAD: number;
 
 // @public
 export function gunzip(bytes: Uint8Array, maxBytes?: number): Promise<Uint8Array>;
@@ -98,14 +35,8 @@ export function gzipIfSmaller(bytes: Uint8Array): Promise<{
     gzipped: boolean;
 }>;
 
-// @public
-export const HEADER_SIZE = 16;
-
 // @public (undocumented)
 export function isQrStreamError(value: unknown): value is QrStreamError;
-
-// @public
-export const MAGIC = 20819;
 
 // @public
 export const MAX_DECODED_BYTES: number;
@@ -115,19 +46,6 @@ export const MAX_INPUT_BYTES: number;
 
 // @public
 export const MAX_WIRE_BYTES: number;
-
-// @public (undocumented)
-export interface Packet {
-    blockSize: number;
-    // (undocumented)
-    flags: number;
-    k: number;
-    payload: Uint8Array;
-    sessionId: number;
-    symbolIdx: number;
-    // (undocumented)
-    version: number;
-}
 
 // @public
 export type PayloadScope = 'input' | 'wire' | 'decoded';
@@ -233,18 +151,9 @@ export interface ReaderLimits {
 }
 
 // @public (undocumented)
-export function readVarint(bytes: Uint8Array, offset: number): {
-    value: number;
-    next: number;
-};
-
-// @public (undocumented)
 export class RenderError extends QrStreamError {
     constructor(message: string, options?: QrStreamErrorOptions);
 }
-
-// @public
-export function splitmix32(seed: number): () => number;
 
 // @public (undocumented)
 export interface StreamMeta {
@@ -256,9 +165,6 @@ export interface StreamMeta {
     sha256: Uint8Array;
     wireLen: number;
 }
-
-// @public
-export function symbolIndices(sessionId: number, symbolIdx: number, k: number): number[];
 
 // @public
 export interface TransferLimits {
@@ -276,9 +182,6 @@ export interface WriterOptions {
     preset: PresetName;
     sessionId?: number;
 }
-
-// @public (undocumented)
-export function writeVarint(value: number): Uint8Array;
 
 // @public
 export class WrongKeyError extends QrStreamError {

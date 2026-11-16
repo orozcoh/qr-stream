@@ -14,6 +14,7 @@ vi.mock('../src/react/useCameraReader', () => ({
     select: async () => undefined,
     cycle: async () => undefined,
     rescan: async () => undefined,
+    start: async () => undefined,
     switching: false,
     error: null,
     diagnostics: {

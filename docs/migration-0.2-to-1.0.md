@@ -14,6 +14,7 @@ complete list of things a 0.2 host has to touch. The current package version and
 its compatibility row are in the [README](../README.md#version-compatibility).
 
 - [Errors: one typed surface](#errors-one-typed-surface)
+- [Low-level helpers are internal](#low-level-helpers-are-internal)
 - [Limits: 8 MiB raw, 1 MiB wire, 8 MiB decoded](#limits-8-mib-raw-1-mib-wire-8-mib-decoded)
 - [Sender: `renderQrStream({ writer })`](#sender-renderqrstream-writer-)
 - [Camera: `start`/`stop`/`enabled` and typed errors](#camera-startstopenabled-and-typed-errors)
@@ -78,6 +79,20 @@ try {
 Some 0.2 core failures were `RangeError` (QR capacity, the decompression cap,
 and metadata/varint parsing). 1.0 maps those to typed codes. Replace
 `instanceof RangeError` with `isQrStreamError(cause)` plus a code check.
+
+## Low-level helpers are internal
+
+The package root exports the transfer surface: presets, limits, the typed
+errors, `gzipIfSmaller`/`gunzip`, `StreamMeta`, and the writer/reader factories.
+Everything underneath is internal: CRC-32, packet encode/decode, fountain
+symbols, the deterministic PRNG, metadata and varint codecs, the AES-GCM
+helpers, and the framing constants. Those exports are marked `@internal`, are
+absent from `etc/qr-stream.api.md`, and may change without a major version.
+
+Use the writer, `renderQrStream({ writer })`, the reader, and the hooks instead
+of driving the building blocks yourself. The one low-level sender form that
+remains public is `renderQrStream({ packets, version })` from
+`@orozcoh/qr-stream/browser`, for a packet source you generate yourself.
 
 ## Limits: 8 MiB raw, 1 MiB wire, 8 MiB decoded
 
@@ -303,6 +318,8 @@ rg "renderQrStream\(\{ packets|createZXingDecoder\(\{|instanceof RangeError" src
 - [ ] Update camera `onError` handlers from `(error: string)` to
       `(error: QrStreamError)`.
 - [ ] Replace `instanceof RangeError` with `isQrStreamError` plus a code check.
+- [ ] Replace imports of the packet, fountain, crypto, metadata, varint, PRNG,
+      or CRC-32 helpers with the writer, reader, or hooks (they are internal).
 - [ ] Decide whether to keep 8 MiB raw input or opt down with
       `limits: { maxInputBytes: 1024 * 1024 }`.
 - [ ] Replace hardcoded packet/version senders with `renderQrStream({ writer })`.

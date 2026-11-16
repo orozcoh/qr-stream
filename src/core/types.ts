@@ -15,10 +15,18 @@ export const PRESETS: Record<PresetName, Preset> = {
   extreme: { version: 40, fps: 6 },
 };
 
-/** Bytes of packet header, excluding the trailing CRC-32. */
+/**
+ * Bytes of packet header, excluding the trailing CRC-32.
+ *
+ * @internal
+ */
 export const HEADER_SIZE = 16;
 
-/** Header plus CRC-32: the number of bytes a frame spends on framing. */
+/**
+ * Header plus CRC-32: the number of bytes a frame spends on framing.
+ *
+ * @internal
+ */
 export const FRAME_OVERHEAD = HEADER_SIZE + 4;
 
 /**

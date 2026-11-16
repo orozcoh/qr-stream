@@ -77,6 +77,7 @@ export const STATE_KEYS = [
   'fileTypeRejected',
   'fileTooLarge',
   'cameraUnavailable',
+  'tryAgain',
   'switchCamera',
   'switching',
   'camera',

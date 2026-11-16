@@ -90,6 +90,35 @@ export default tseslint.config(
     },
   },
   {
+    // The core is environment-agnostic and must stay that way. This replaces
+    // the retired purity test's global guard: browser access belongs in
+    // src/browser, and host DOM types must not leak into the core.
+    files: ['src/core/**/*.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'window', message: 'src/core must not touch the DOM; use src/browser.' },
+        { name: 'document', message: 'src/core must not touch the DOM; use src/browser.' },
+        { name: 'navigator', message: 'src/core must not touch the DOM; use src/browser.' },
+        { name: 'localStorage', message: 'src/core must not touch storage; use src/browser.' },
+        { name: 'requestAnimationFrame', message: 'src/core must not schedule frames; use src/browser.' },
+      ],
+      '@typescript-eslint/no-restricted-types': [
+        'error',
+        {
+          types: {
+            HTMLElement: { message: 'src/core must not reference DOM element types; use src/browser.' },
+            HTMLCanvasElement: { message: 'src/core must not reference DOM element types; use src/browser.' },
+            HTMLVideoElement: { message: 'src/core must not reference DOM element types; use src/browser.' },
+            MediaStream: { message: 'src/core must not reference media types; use src/browser.' },
+            Window: { message: 'src/core must not reference the window type; use src/browser.' },
+            Document: { message: 'src/core must not reference the document type; use src/browser.' },
+          },
+        },
+      ],
+    },
+  },
+  {
     files: ['tests/react18-runtime/**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {

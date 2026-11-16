@@ -95,6 +95,22 @@ describe('createQrStreamWriter', () => {
     expect(meta.sha256.length).toBe(32);
   });
 
+  test('reports the same sanitized, truncated filename the receiver decodes', async () => {
+    const writer = await createQrStreamWriter(noisy(500, 29), {
+      // Path separators are stripped and the UTF-8 byte budget is 64.
+      filename: `${'é'.repeat(40)}/../<report>.json`,
+      preset: 'fast',
+    });
+    const [first] = await take(writer.packets(), 1);
+    const packet = decodePacket(first as Uint8Array) as NonNullable<ReturnType<typeof decodePacket>>;
+    const { value: metaLen, next } = readVarint(packet.payload, 0);
+    const meta = decodeMeta(packet.payload.subarray(next, next + metaLen));
+
+    expect(writer.meta.filename).toBe(meta.filename);
+    expect(new TextEncoder().encode(writer.meta.filename).length).toBeLessThanOrEqual(64);
+    expect(writer.meta.filename).not.toMatch(/[/\\]/);
+  });
+
   test('emits every source symbol then repairs', async () => {
     const writer = await createQrStreamWriter(noisy(20000), {
       filename: 'big.json',

@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { readQrStream, type CameraController, type CameraDevice } from '../src/browser/camera.js';
-import { CameraError, type QrStreamError } from '../src/core/errors.js';
+import { CameraError, DecoderError, type QrStreamError } from '../src/core/errors.js';
 import {
   useCameraReader,
   type UseCameraReaderOptions,
@@ -305,42 +305,104 @@ test('a reported controller failure and its rejection are reported once', async 
   view.unmount();
 });
 
-test('select, cycle, and rescan resolve after controller rejections', async () => {
+test('select, cycle, and rescan rejections release the dead controller', async () => {
+  const failWith = (failure: CameraError) =>
+    vi.fn(async () => {
+      throw failure;
+    });
+
+  const runCase = async (
+    failure: CameraError,
+    overrides: Partial<CameraController>,
+    action: (view: View) => Promise<void>,
+  ): Promise<void> => {
+    const controller = fakeController(overrides);
+    vi.mocked(readQrStream).mockResolvedValueOnce(controller);
+    const onError = vi.fn();
+    const view = renderHarness({ onError });
+    await flush();
+
+    await act(async () => {
+      await expect(action(view)).resolves.toBeUndefined();
+    });
+
+    expect(view.result.error).toBe(failure);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(view.result.switching).toBe(false);
+    // A rejected reopen leaves no live track, so the hook forgets it and the
+    // retry action can start a fresh controller.
+    expect(controller.stop).toHaveBeenCalledTimes(1);
+    expect(view.result.ready).toBe(false);
+    view.unmount();
+  };
+
   const selectFailure = new CameraError('CAMERA_UNAVAILABLE', 'That camera could not be opened.');
   const cycleFailure = new CameraError('CAMERA_IN_USE', 'The camera is in use by another app.');
   const rescanFailure = new CameraError('CAMERA_NOT_FOUND', 'No camera was found on this device.');
-  const controller = fakeController({
-    select: vi.fn(async () => {
-      throw selectFailure;
-    }),
-    cycle: vi.fn(async () => {
-      throw cycleFailure;
-    }),
+
+  await runCase(selectFailure, { select: failWith(selectFailure) }, (view) => view.result.select('cam-2'));
+  await runCase(cycleFailure, { cycle: failWith(cycleFailure) }, (view) => view.result.cycle());
+  await runCase(rescanFailure, { rescan: failWith(rescanFailure) }, (view) => view.result.rescan());
+});
+
+test('a failed rescan releases the dead controller so start can recover', async () => {
+  const failure = new CameraError('CAMERA_UNAVAILABLE', 'The camera could not be reopened.');
+  const first = fakeController({
     rescan: vi.fn(async () => {
-      throw rescanFailure;
+      throw failure;
     }),
   });
-  vi.mocked(readQrStream).mockResolvedValue(controller);
-  const onError = vi.fn();
-  const view = renderHarness({ onError });
+  const second = fakeController();
+  vi.mocked(readQrStream).mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+  const view = renderHarness();
   await flush();
-
-  await act(async () => {
-    await expect(view.result.select('cam-2')).resolves.toBeUndefined();
-  });
-  expect(view.result.error).toBe(selectFailure);
-
-  await act(async () => {
-    await expect(view.result.cycle()).resolves.toBeUndefined();
-  });
-  expect(view.result.error).toBe(cycleFailure);
+  expect(view.result.ready).toBe(true);
 
   await act(async () => {
     await expect(view.result.rescan()).resolves.toBeUndefined();
   });
-  expect(view.result.error).toBe(rescanFailure);
-  expect(onError).toHaveBeenCalledTimes(3);
-  expect(view.result.switching).toBe(false);
+
+  // The controller shut itself down, so the hook must drop it. A retry that
+  // still sees a live reference would never reopen the camera.
+  expect(first.stop).toHaveBeenCalledTimes(1);
+  expect(view.result.ready).toBe(false);
+  expect(view.result.error).toBe(failure);
+
+  await act(async () => {
+    await view.result.start();
+  });
+
+  expect(readQrStream).toHaveBeenCalledTimes(2);
+  expect(view.result.ready).toBe(true);
+  view.unmount();
+});
+
+test('a reported DECODER_FAILED releases the controller so start rebuilds the decoder', async () => {
+  let report: ((error: QrStreamError) => void) | null = null;
+  const first = fakeController();
+  first.onError = (callback) => {
+    report = callback;
+  };
+  const second = fakeController();
+  vi.mocked(readQrStream).mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+  const createDecoder = vi.fn(baseDecoder);
+  const view = renderHarness({ createDecoder });
+  await flush();
+  expect(view.result.ready).toBe(true);
+
+  act(() => report?.(new DecoderError('Decoding is not working.')));
+
+  expect(first.stop).toHaveBeenCalledTimes(1);
+  expect(view.result.ready).toBe(false);
+  expect(view.result.error?.code).toBe('DECODER_FAILED');
+
+  await act(async () => {
+    await view.result.start();
+  });
+
+  expect(createDecoder).toHaveBeenCalledTimes(2);
+  expect(readQrStream).toHaveBeenCalledTimes(2);
+  expect(view.result.ready).toBe(true);
   view.unmount();
 });
 

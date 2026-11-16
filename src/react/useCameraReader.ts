@@ -190,7 +190,13 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
 
       controllerRef.current = controller;
       controller.onSymbol((bytes) => symbolRef.current?.(bytes));
-      controller.onError((failure) => fail(failure));
+      controller.onError((failure) => {
+        // A dead decoder cannot recover by itself. Release the controller so
+        // the host's retry can open a fresh camera and decoder instead of
+        // reusing a session that will never decode another frame.
+        if (failure.code === 'DECODER_FAILED') stop();
+        fail(failure);
+      });
       sync();
       clearError();
       if (mountedRef.current) setReady(true);
@@ -211,7 +217,7 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
         if (mountedRef.current) setStarting(false);
       }
     }
-  }, [clearError, fail, sync]);
+  }, [clearError, fail, stop, sync]);
 
   // Registered before the auto-open effect so a StrictMode remount marks the
   // hook mounted again before `start()` reads it.
@@ -234,36 +240,44 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
   }, [enabled, start, stop]);
 
   const runSwitch = useCallback(
-    async (action: () => Promise<void> | void): Promise<void> => {
+    async (action: () => Promise<void> | void, recover: boolean): Promise<void> => {
       if (mountedRef.current) setSwitching(true);
       try {
         await action();
       } catch (cause) {
         fail(asCameraError(cause, 'That camera could not be opened.'));
+        // A rejected reopen leaves the controller with no live track, so the
+        // hook must forget it; otherwise start() would see a controller and
+        // refuse to open a fresh camera, dead-ending the retry.
+        if (recover) stop();
       } finally {
         sync();
         if (mountedRef.current) setSwitching(false);
       }
     },
-    [fail, sync],
+    [fail, stop, sync],
   );
 
   const select = useCallback(
     (id: string): Promise<void> => {
       const controller = controllerRef.current;
-      return controller ? runSwitch(() => controller.select(id)) : Promise.resolve();
+      // `open()` stops the old tracks before requesting the new camera, so a
+      // rejected select leaves no live stream to keep.
+      return controller ? runSwitch(() => controller.select(id), true) : Promise.resolve();
     },
     [runSwitch],
   );
 
   const cycle = useCallback((): Promise<void> => {
     const controller = controllerRef.current;
-    return controller ? runSwitch(() => controller.cycle()) : Promise.resolve();
+    return controller ? runSwitch(() => controller.cycle(), true) : Promise.resolve();
   }, [runSwitch]);
 
   const rescan = useCallback((): Promise<void> => {
     const controller = controllerRef.current;
-    return controller ? runSwitch(() => controller.rescan()) : Promise.resolve();
+    // The controller shuts itself down on a failed rescan; drop the dead
+    // reference here so the retry action can start() again.
+    return controller ? runSwitch(() => controller.rescan(), true) : Promise.resolve();
   }, [runSwitch]);
 
   const setZoom = useCallback(

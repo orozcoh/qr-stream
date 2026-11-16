@@ -206,9 +206,11 @@ npm view @orozcoh/qr-stream dist-tags
 # latest: 0.2.0
 ```
 
-If `latest` moved, put it back and re-check:
+If `latest` moved during the RC publish, put it back on the last good release
+and re-check:
 
 ```bash
+# Before the final 1.0.0 publish the last good version is 0.2.0:
 npm dist-tag add '@orozcoh/qr-stream@0.2.0' latest
 npm view @orozcoh/qr-stream dist-tags
 ```
@@ -353,10 +355,11 @@ npm deprecate '@orozcoh/qr-stream@1.0.1' 'Broken reader teardown; use 1.0.2'
 ```
 
 **Point `latest` back at the last good version.** Deprecation does not stop a
-fresh install of `@orozcoh/qr-stream` from resolving `latest`:
+fresh install of `@orozcoh/qr-stream` from resolving `latest`. Use the last good
+1.x release — `0.2.0` is only the fallback before any 1.x has shipped:
 
 ```bash
-npm dist-tag add '@orozcoh/qr-stream@0.2.0' latest
+npm dist-tag add '@orozcoh/qr-stream@1.0.0' latest
 npm view @orozcoh/qr-stream dist-tags
 ```
 

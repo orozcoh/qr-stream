@@ -1,5 +1,19 @@
-export { PayloadTooLargeError, QrStreamError, WrongKeyError } from '../core/errors.js';
-export type { PayloadScope, QrStreamErrorCode, QrStreamErrorOptions, QrStreamRecovery } from '../core/errors.js';
+export {
+  CameraError,
+  DecoderError,
+  PayloadTooLargeError,
+  QrStreamError,
+  RenderError,
+  WrongKeyError,
+  isQrStreamError,
+} from '../core/errors.js';
+export type {
+  CameraErrorCode,
+  PayloadScope,
+  QrStreamErrorCode,
+  QrStreamErrorOptions,
+  QrStreamRecovery,
+} from '../core/errors.js';
 export type { StreamMeta } from '../core/meta.js';
 export type { PresetName, ReaderLimits, TransferLimits } from '../core/types.js';
 export type { QrStreamWriter } from '../core/writer.js';
