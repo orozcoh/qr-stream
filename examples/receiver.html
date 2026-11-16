@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minimal receiver — qr-stream</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <p class="crumbs"><a href="./">examples</a></p>
+      <h1>Minimal receiver</h1>
+      <p>
+        The camera needs HTTPS or localhost. The ZXing WebAssembly module is imported through Vite's
+        <code>?url</code>, so it is served from this origin — never a CDN.
+      </p>
+
+      <video id="video" playsinline muted aria-label="Camera preview"></video>
+
+      <div class="actions">
+        <button id="start" type="button">Start camera</button>
+        <button id="stop" type="button" disabled>Stop</button>
+      </div>
+
+      <p id="progress" class="status" role="status">0 / 0 blocks</p>
+      <p id="result" class="status" role="status"></p>
+      <pre id="error" class="error" role="alert"></pre>
+
+      <script type="module" src="/src/receiver.ts"></script>
+    </main>
+  </body>
+</html>

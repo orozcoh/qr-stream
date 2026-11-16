@@ -12,7 +12,10 @@
         "src/browser/decoders/zxing.ts",
         "scripts/release.mjs",
         "bench/run.ts",
-        "demo/e2e.tsx"
+        "demo/e2e.tsx",
+        "examples/src/sender.ts",
+        "examples/src/receiver.ts",
+        "examples/src/hooks.tsx"
       ],
       "ignore": ["tests/fixtures/v0.2/**"]
     }

@@ -27,3 +27,6 @@ tmp/
 
 # Benchmark output; bench/baseline.json is committed
 bench/results.json
+
+# Generated API reference (built by `pnpm docs:build`, deployed by CI)
+docs/api/

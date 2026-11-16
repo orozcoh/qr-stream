@@ -24,6 +24,6 @@
       "@orozcoh/qr-stream/browser/zxing": ["./src/browser/decoders/zxing.ts"]
     }
   },
-  "include": ["src", "tests", "bench", "demo", "playwright.config.ts"],
-  "exclude": ["node_modules", "dist", "tests/react18-runtime"]
+  "include": ["src", "tests", "bench", "demo", "examples", "playwright.config.ts"],
+  "exclude": ["node_modules", "dist", "examples/dist", "tests/react18-runtime"]
 }

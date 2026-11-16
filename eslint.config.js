@@ -13,6 +13,7 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       'demo/dist/**',
+      'examples/dist/**',
       'coverage/**',
       'node_modules/**',
       'docs/**',

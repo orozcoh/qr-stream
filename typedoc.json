@@ -1,0 +1,12 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "@orozcoh/qr-stream",
+  "entryPoints": ["src/index.ts", "src/browser.ts", "src/qr.ts", "src/react/index.ts", "src/browser/decoders/zxing.ts"],
+  "tsconfig": "tsconfig.json",
+  "out": "docs/api",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "readme": "none",
+  "includeVersion": true,
+  "githubPages": false
+}

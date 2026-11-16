@@ -7,6 +7,9 @@ The point of this page is to publish real numbers and to make a regression
 visible. It is not a claim that these numbers transfer unchanged to every
 phone, browser, or CI runner — the caveats at the end matter.
 
+Related: [integration](integration.md), [troubleshooting](troubleshooting.md),
+and the [threat model](threat-model.md).
+
 ## Running the benchmarks
 
 ```sh

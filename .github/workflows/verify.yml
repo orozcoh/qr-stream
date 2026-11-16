@@ -78,6 +78,12 @@ jobs:
       - name: Build demo PWA
         run: pnpm demo:build
 
+      - name: Build examples
+        run: pnpm examples:build
+
+      - name: Build API reference
+        run: pnpm docs:build
+
       # Real-browser tests: one Chromium leg is enough; the two Node versions
       # already cover the library itself through Vitest.
       - name: Install Chromium

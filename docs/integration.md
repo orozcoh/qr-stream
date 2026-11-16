@@ -11,6 +11,11 @@ npm install @orozcoh/qr-stream
 The core is DOM-free and runs in Node. The browser and React entries need a DOM;
 the decoder needs `zxing-wasm`, installed separately.
 
+Related: [API reference](https://orozcoh.github.io/qr-stream/),
+[migration from 0.2](migration-0.2-to-1.0.md),
+[troubleshooting](troubleshooting.md), [threat model](threat-model.md),
+[performance](performance.md), and [examples](../examples/).
+
 ## 1. Choose an entry point
 
 | Import | What it gives you | DOM |
