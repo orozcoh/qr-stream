@@ -39,42 +39,46 @@ Recorded **2026-11-16** on:
 CI enforces the same budgets on `ubuntu-latest` with Node 22. Time ceilings
 are typically 3–7× these numbers (looser for sub-millisecond and startup
 metrics), so the shared runner can be several times slower before a ceiling
-trips. The deterministic `rgbaKiB` and `symbolsToComplete` entries are
-deliberately tighter: they guard an exact allocation and fountain overhead,
-not wall-clock variance.
+trips. The deterministic `rgbaBufferKiB` entry guards the returned image size;
+`paintAllocKiB` is a measured per-frame ArrayBuffer delta; `frameBytesKiB` is a
+constructor-counted per-frame allocation total that catches a second buffer
+even when V8 reclaims it; `symbolsToComplete` guards fountain overhead. Those
+four are deliberately tighter than the wall-clock ceilings.
 
 | Metric | Unit | Baseline (mean) | Budget |
 | --- | --- | ---: | ---: |
-| `writer.json.plain` | ms | 6.43 | ≤ 40 |
+| `writer.json.plain` | ms | 6.71 | ≤ 40 |
 | `writer.random.plain` | ms | 21.1 | ≤ 90 |
 | `writer.random.encodeRepair` | ms | 0.093 | ≤ 2 |
-| `writer.json.encrypted` | ms | 78.7 | ≤ 250 |
-| `writer.random.encrypted` | ms | 94.1 | ≤ 300 |
-| `writer.random.plain.heap` | MiB | ~2.00 (approx) | ≤ 24 |
-| `writer.random.encrypted.heap` | MiB | ~2.01 (approx) | ≤ 32 |
-| `fountain.stream.decode` | ms | 979 | ≤ 4000 |
-| `fountain.stream.assemble` | ms | 0.163 | ≤ 5 |
+| `writer.json.encrypted` | ms | 77.8 | ≤ 250 |
+| `writer.random.encrypted` | ms | 92.5 | ≤ 300 |
+| `writer.random.plain.heap` | MiB | ~1.85 (approx) | ≤ 24 |
+| `writer.random.encrypted.heap` | MiB | ~2.00 (approx) | ≤ 32 |
+| `fountain.stream.decode` | ms | 967 | ≤ 4000 |
+| `fountain.stream.assemble` | ms | 0.166 | ≤ 5 |
 | `fountain.stream.symbolsToComplete` | packets | 1254 | ≤ 1600 |
-| `render.v20.packetToMatrix` | ms | 11.7 | ≤ 60 |
-| `render.v40.packetToMatrix` | ms | 39.7 | ≤ 180 |
+| `render.v20.packetToMatrix` | ms | 12.7 | ≤ 60 |
+| `render.v40.packetToMatrix` | ms | 40.9 | ≤ 180 |
 | `render.v20.matrixToRGBA` | ms | 0.124 | ≤ 3 |
-| `render.v40.matrixToRGBA` | ms | 0.428 | ≤ 8 |
-| `render.v20.paintFrame` | ms | 11.9 | ≤ 60 |
-| `render.v40.paintFrame` | ms | 40.3 | ≤ 180 |
-| `render.v20.sustainedFps` | fps | 84.1 | ≥ 15 |
-| `render.v40.sustainedFps` | fps | 24.8 | ≥ 6 |
-| `render.v40.rgbaKiB` | KiB | 133.69 | ≤ 140 |
-| `reader.stream.add` | ms | 963 | ≤ 4000 |
-| `reader.stream.reassemble` | ms | 967 | ≤ 4200 |
+| `render.v40.matrixToRGBA` | ms | 0.469 | ≤ 8 |
+| `render.v20.paintFrame` | ms | 13.1 | ≤ 60 |
+| `render.v40.paintFrame` | ms | 40.2 | ≤ 180 |
+| `render.v20.sustainedFps` | fps | 76.2 | ≥ 15 |
+| `render.v40.sustainedFps` | fps | 24.9 | ≥ 6 |
+| `render.v40.rgbaBufferKiB` | KiB | 133.69 | ≤ 140 |
+| `render.v40.paintAllocKiB` | KiB | 133.69 | ≤ 150 |
+| `render.v40.frameBytesKiB` | KiB | 133.69 | ≤ 180 |
+| `reader.stream.add` | ms | 964 | ≤ 4000 |
+| `reader.stream.reassemble` | ms | 1004 | ≤ 4200 |
 | `reader.frame.add` | ms | 0.768 | ≤ 4 |
-| `reader.zxing.startup` | ms | 5.4 | ≤ 500 |
+| `reader.zxing.startup` | ms | 8.98 | ≤ 500 |
 | `reader.zxing.720p.v20` | ms | 5.49 | ≤ 40 |
-| `reader.zxing.720p.v40` | ms | 7.04 | ≤ 50 |
-| `reader.zxing.1080p.v40` | ms | 14.0 | ≤ 80 |
+| `reader.zxing.720p.v40` | ms | 7.01 | ≤ 50 |
+| `reader.zxing.1080p.v40` | ms | 14.2 | ≤ 80 |
 
-Every number is the mean of a timed sample set except the memory entries, the
-derived `fps`, `KiB`, and `frame.add` entries, and the deterministic packet
-count. `p50`/`p99` and the relative margin of error are in `bench/results.json`.
+Every number is the mean of a timed sample set except the memory entries (one
+approximate sample), the derived `fps` and `frame.add` entries, the
+single-sample `KiB` measurements, and the deterministic packet count. `p50`/`p99` and the relative margin of error are in `bench/results.json`.
 
 ## What the numbers mean
 
@@ -96,15 +100,30 @@ pseudorandom subset of the source blocks. At the `fast` preset that is about
 
 `packetToMatrix` dominates a painted frame, not `matrixToRGBA`:
 
-- v20: 11.7 ms matrix encoding + 0.12 ms RGBA expansion ≈ 11.9 ms per frame.
-- v40: 39.5 ms matrix encoding + 0.43 ms RGBA expansion ≈ 40.3 ms per frame.
+- v20: about 12.7 ms matrix encoding + 0.12 ms RGBA expansion, about 13 ms per painted frame.
+- v40: about 40.9 ms matrix encoding + 0.47 ms RGBA expansion, about 40 ms per painted frame.
 
-That is about 18% of the v20 frame interval at the `fast` preset (15 fps,
+That is about 20% of the v20 frame interval at the `fast` preset (15 fps,
 66.7 ms) and about 24% of the v40 interval at `extreme` (6 fps, 166.7 ms).
-There is no per-frame allocation problem to fix: `matrixToRGBA` produces one
-133.69 KiB buffer per v40 frame, which the GC handles comfortably at 6 fps.
-The remaining cost is `qrcode-generator` choosing among its eight masks; it is
-not a per-frame allocation we can reuse away.
+There is no per-frame allocation problem to fix, and this is now measured
+three ways rather than recomputed from the QR version:
+
+- `rgbaBufferKiB` reads `matrixToRGBA(matrix, 1).data.byteLength` from a real
+  call: 133.69 KiB.
+- `paintAllocKiB` retains each painted frame's buffer and reads
+  `process.memoryUsage().arrayBuffers` across 16 frames: 133.69 KiB/frame, one
+  buffer per frame. V8 can reclaim a short-lived second buffer between frames,
+  so this delta is a lower bound on a discarded allocation; its ceiling is
+  150 KiB.
+- `frameBytesKiB` swaps `Uint8ClampedArray` for a counting subclass during the
+  synchronous paint and counts every allocated byte regardless of collection:
+  133.69 KiB/frame. A second 133.69 KiB buffer would read 267.38 and trip the
+  180 KiB ceiling; an injected discarded buffer was verified to do exactly
+  that during review.
+
+The GC handles 133.69 KiB per frame comfortably at 6 fps. The remaining cost is
+`qrcode-generator` choosing among its eight masks; it is not a per-frame
+allocation we can reuse away.
 
 The `paintFrame` probe runs the real `renderQrStream` loop against a stub
 canvas, so it covers matrix construction, RGBA expansion, the `ImageData`
@@ -120,9 +139,9 @@ frame interval at 15 fps. Even the pathological full-stream figure is modest:
 a lossy 1 MiB transfer needs 1254 accepted packets and about 0.97 s of CPU
 spread over roughly 100 seconds of scanning.
 
-ZXing on a synthetic 720p frame costs 5.6–7.0 ms; at 1080p it is 14.1 ms. A
+ZXing on a synthetic 720p frame costs 5.5–7.0 ms; at 1080p it is 14.2 ms. A
 6 fps `extreme` transfer allows 166.7 ms per frame, so camera decode is not the
-bottleneck on this machine. The wasm startup measured here (5–8 ms across runs) excludes
+bottleneck on this machine. The wasm startup measured here (5–9 ms across runs) excludes
 the network fetch a browser performs on first load.
 
 ### Bundle size
@@ -196,7 +215,9 @@ of magnitude above the baseline.
   milliseconds.
 - **Memory is approximate.** See above. Large negative or unexpectedly small
   deltas mean V8 reclaimed a transient before the second reading, not that the
-  writer stopped allocating.
+  writer stopped allocating. The render allocation probe avoids that by
+  retaining each painted frame's buffer for the duration of a round; without
+  `--expose-gc` it is marked approximate in `bench/results.json`.
 - **Hardware variance.** These are one Apple M1 laptop's numbers. CI budgets
   intentionally leave a 3–7× margin; a desktop x86 runner may be faster or
   slower than this machine at any individual metric.
@@ -206,6 +227,6 @@ of magnitude above the baseline.
   represent real browser rendering. If profiling ever shows it, the follow-up
   is to throttle the progress state to animation-frame rate or compare values
   before calling `setProgress`; do that against a measurement, not a guess.
-- **ZXing startup excludes the network.** The 5–8 ms is wasm compilation from a
+- **ZXing startup excludes the network.** The 5–9 ms is wasm compilation from a
   local binary. On a cold browser load the fetch and compile are additional and
   depend on hosting and cache headers.

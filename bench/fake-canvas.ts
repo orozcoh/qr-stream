@@ -58,10 +58,12 @@ function fakeCanvas(cssWidth: number, context: FakeContext): HTMLCanvasElement {
   return canvas as unknown as HTMLCanvasElement;
 }
 
-export function installFakeCanvas(cssWidth = 512): FakeCanvasEnvironment {
+export function installFakeCanvas(cssWidth = 512, retainImages?: Uint8ClampedArray[]): FakeCanvasEnvironment {
   const context: FakeContext = {
     imageSmoothingEnabled: true,
-    putImageData: () => undefined,
+    putImageData: (image) => {
+      retainImages?.push(image.data);
+    },
     drawImage: () => undefined,
     clearRect: () => undefined,
   };

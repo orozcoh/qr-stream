@@ -5,10 +5,14 @@ import { qrCapacity, packetToMatrix } from '../src/qr/matrix.js';
 import { matrixToRGBA } from '../src/qr/raster.js';
 import { installFakeCanvas } from './fake-canvas.js';
 import { packetFor } from './fixtures.js';
+import { forceGc, gcAvailable } from './memory.js';
 import { constantMetric, runAndCollect, type BenchMetric, type MetricSpec } from './util.js';
 
 const PACKET_COUNT = 8;
 const PAINT_FRAMES = 16;
+const ALLOC_FRAMES = 16;
+const ALLOC_ROUNDS = 3;
+const COUNTED_FRAMES = 5;
 
 const packetsFor = (version: number): Uint8Array[] => {
   const capacity = qrCapacity(version) - FRAME_OVERHEAD;
@@ -97,6 +101,168 @@ async function paintFrameMetric(version: number, fps: number): Promise<BenchMetr
   }
 }
 
+/**
+ * Measure how much ArrayBuffer memory one painted v40 frame allocates.
+ *
+ * The fake canvas makes every canvas operation a no-op, so the only array
+ * buffer allocated per frame is the `matrixToRGBA` result (the stub
+ * `ImageData` keeps a reference rather than copying). Forcing GC before each
+ * round and reading `arrayBuffers` before/after 16 frames gives a per-frame
+ * delta. The maximum of three rounds is used because a collection that lands
+ * mid-round can only undercount, never invent an allocation.
+ *
+ * A second per-frame buffer would roughly double the delta and trip the
+ * budget; the returned-buffer-size metric next to it cannot catch that.
+ */
+async function paintAllocationMetric(): Promise<BenchMetric> {
+  const id = 'render.v40.paintAllocKiB';
+  // Holding every painted frame makes the primary per-frame buffer
+  // uncollectable, so the ArrayBuffer delta reflects allocation rather than
+  // whatever V8 happened to reclaim between frames.
+  const retained: Uint8ClampedArray[] = [];
+  const environment = installFakeCanvas(512, retained);
+  try {
+    const controller = renderQrStream({
+      packets: cycle(packetsFor(40)),
+      canvas: environment.canvas,
+      version: 40,
+      fps: 6,
+    });
+
+    try {
+      let time = 1;
+      const interval = 1000 / 6;
+      controller.play();
+      await flushMicrotasks();
+      for (let frame = 0; frame < 3; frame += 1) {
+        environment.step(time);
+        time += interval;
+        await flushMicrotasks();
+      }
+
+      const samples: number[] = [];
+      for (let round = 0; round < ALLOC_ROUNDS; round += 1) {
+        forceGc();
+        const before = process.memoryUsage().arrayBuffers;
+        const retainedBefore = retained.length;
+        for (let frame = 0; frame < ALLOC_FRAMES; frame += 1) {
+          environment.step(time);
+          time += interval;
+          await flushMicrotasks();
+        }
+        const painted = retained.length - retainedBefore;
+        const after = process.memoryUsage().arrayBuffers;
+        // A step can occasionally miss the fps accumulator by a floating-point
+        // hair; divide by frames actually painted so a skip does not skew the
+        // per-frame number.
+        if (painted <= 0) throw new Error('render allocation probe painted no frames');
+        samples.push((after - before) / 1024 / painted);
+        retained.length = 0;
+      }
+
+      return constantMetric(
+        {
+          id,
+          group: 'render',
+          description: `measured ArrayBuffer growth per painted v40 frame (${ALLOC_FRAMES} frames, GC before each round)`,
+          unit: 'KiB',
+        },
+        Math.max(...samples),
+        !gcAvailable(),
+      );
+    } finally {
+      controller.stop();
+    }
+  } finally {
+    environment.restore();
+  }
+}
+
+/**
+ * Count every byte of `Uint8ClampedArray` allocated by one painted frame.
+ *
+ * The ArrayBuffer delta above is a real measurement, but it can undercount a
+ * short-lived second buffer that V8 reclaims between frames. Swapping the
+ * constructor for the duration of the synchronous paint counts allocations
+ * regardless of collection, so a second/intermediate buffer doubles the value
+ * even when it is discarded immediately. Only the paint call runs while the
+ * constructor is replaced; it is restored in `finally`.
+ */
+async function paintFrameBytesMetric(): Promise<BenchMetric> {
+  const id = 'render.v40.frameBytesKiB';
+  const environment = installFakeCanvas(512);
+  try {
+    const controller = renderQrStream({
+      packets: cycle(packetsFor(40)),
+      canvas: environment.canvas,
+      version: 40,
+      fps: 6,
+    });
+
+    try {
+      let time = 1;
+      const interval = 1000 / 6;
+      controller.play();
+      await flushMicrotasks();
+      for (let frame = 0; frame < 3; frame += 1) {
+        environment.step(time);
+        time += interval;
+        await flushMicrotasks();
+      }
+
+      const globals = globalThis as { Uint8ClampedArray: typeof Uint8ClampedArray };
+      const Original = globals.Uint8ClampedArray;
+      const samples: number[] = [];
+
+      try {
+        for (let round = 0; round < COUNTED_FRAMES; round += 1) {
+          let bytes = 0;
+          class CountingArray extends Original {
+            constructor(...args: ConstructorParameters<typeof Uint8ClampedArray>) {
+              super(...args);
+              bytes += this.byteLength;
+            }
+          }
+          globals.Uint8ClampedArray = CountingArray as unknown as typeof Uint8ClampedArray;
+
+          const paintedBefore = controller.framesPainted();
+          try {
+            // A floating-point hair can make a single step miss the fps
+            // accumulator; step until at least one frame paints.
+            for (let attempt = 0; attempt < 3 && controller.framesPainted() === paintedBefore; attempt += 1) {
+              environment.step(time);
+              time += interval;
+            }
+          } finally {
+            globals.Uint8ClampedArray = Original;
+          }
+
+          const painted = controller.framesPainted() - paintedBefore;
+          await flushMicrotasks();
+          if (painted <= 0) throw new Error('render byte probe painted no frames');
+          samples.push(bytes / 1024 / painted);
+        }
+      } finally {
+        globals.Uint8ClampedArray = Original;
+      }
+
+      return constantMetric(
+        {
+          id,
+          group: 'render',
+          description: 'Uint8ClampedArray bytes allocated per painted v40 frame (constructor accounting)',
+          unit: 'KiB',
+        },
+        Math.max(...samples),
+      );
+    } finally {
+      controller.stop();
+    }
+  } finally {
+    environment.restore();
+  }
+}
+
 export async function runRenderBench(): Promise<BenchMetric[]> {
   const packets = {
     20: packetsFor(20),
@@ -151,7 +317,10 @@ export async function runRenderBench(): Promise<BenchMetric[]> {
   const paint40 = await paintFrameMetric(40, 6);
   metrics.push(paint20, paint40);
 
-  const rgba40KiB = ((matrix[40].size + 8) * (matrix[40].size + 8) * 4) / 1024;
+  const paintAlloc40 = await paintAllocationMetric();
+  const frameBytes40 = await paintFrameBytesMetric();
+  const rgbaBuffer40KiB = matrixToRGBA(matrix[40], 1).data.byteLength / 1024;
+
   metrics.push(
     constantMetric(
       {
@@ -173,13 +342,15 @@ export async function runRenderBench(): Promise<BenchMetric[]> {
     ),
     constantMetric(
       {
-        id: 'render.v40.rgbaKiB',
+        id: 'render.v40.rgbaBufferKiB',
         group: 'render',
-        description: 'bytes allocated per v40 frame by matrixToRGBA, including the 4-module quiet zone',
+        description: 'returned RGBA buffer size per v40 frame, read from a real matrixToRGBA call at scale 1',
         unit: 'KiB',
       },
-      rgba40KiB,
+      rgbaBuffer40KiB,
     ),
+    paintAlloc40,
+    frameBytes40,
   );
 
   return metrics;

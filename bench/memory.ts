@@ -21,6 +21,11 @@ export function gcAvailable(): boolean {
   return typeof (globalThis as { gc?: () => void }).gc === 'function';
 }
 
+/** Force a collection when the runner was started with `--expose-gc`. */
+export function forceGc(): void {
+  collect();
+}
+
 function usedBytes(): number {
   const usage = process.memoryUsage();
   return usage.heapUsed + usage.arrayBuffers;

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "rationale": "Absolute ceilings, not a same-machine delta. Time ceilings are typically 3-7x the Apple M1 / macOS baseline recorded on 2026-11-16 and rounded up (looser for sub-millisecond and startup metrics), so a slower shared CI runner passes while an algorithmic regression fails. Two entries are deterministic and intentionally tight: render.v40.rgbaKiB guards an exact per-frame allocation, and fountain.stream.symbolsToComplete guards fountain overhead. `min` entries encode a floor where higher is better. Memory entries are coarse runaway guards: the measurement is an approximate retained heap + ArrayBuffer delta and varies between V8 versions. `pnpm bench:compare` is the separate 20% same-machine guardrail.",
+  "rationale": "Absolute ceilings, not a same-machine delta. Time ceilings are typically 3-7x the Apple M1 / macOS baseline recorded on 2026-11-16 and rounded up (looser for sub-millisecond and startup metrics), so a slower shared CI runner passes while an algorithmic regression fails. Deterministic entries are intentionally tight: render.v40.rgbaBufferKiB guards the returned image size (a quiet-zone/scale change), render.v40.paintAllocKiB is a measured per-frame ArrayBuffer delta and render.v40.frameBytesKiB is a constructor-counted per-frame allocation total (both catch a second per-frame buffer), and fountain.stream.symbolsToComplete guards fountain overhead. `min` entries encode a floor where higher is better. Memory entries are coarse runaway guards: the measurement is an approximate retained heap + ArrayBuffer delta and varies between V8 versions. `pnpm bench:compare` is the separate 20% same-machine guardrail.",
   "metrics": {
     "writer.json.plain": {
       "unit": "ms",
@@ -92,10 +92,20 @@
       "min": 6,
       "note": "extreme preset rate; 6 fps needs a 166.7 ms frame budget"
     },
-    "render.v40.rgbaKiB": {
+    "render.v40.rgbaBufferKiB": {
       "unit": "KiB",
       "max": 140,
-      "note": "133.69 KiB exact at scale 1; guards accidental buffer growth"
+      "note": "returned RGBA buffer size, read from a real matrixToRGBA call; 133.69 KiB exact at scale 1, guards a quiet-zone or scale change"
+    },
+    "render.v40.paintAllocKiB": {
+      "unit": "KiB",
+      "max": 150,
+      "note": "measured ArrayBuffer growth per painted frame with the returned buffers retained; baseline 133.69 KiB, so a second per-frame buffer trips the ceiling even when V8 reclaims part of it"
+    },
+    "render.v40.frameBytesKiB": {
+      "unit": "KiB",
+      "max": 180,
+      "note": "Uint8ClampedArray bytes allocated per painted frame, counted by constructor accounting; baseline 133.69 KiB, so a second buffer (~267) trips the ceiling regardless of GC"
     },
     "reader.stream.add": {
       "unit": "ms",
