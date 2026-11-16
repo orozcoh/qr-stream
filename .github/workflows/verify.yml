@@ -42,6 +42,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Typecheck React 18
+        run: pnpm typecheck:react18
+
       - name: Test
         run: pnpm test
 

@@ -247,7 +247,7 @@ export function QrStreamReceiver({
 
       {cameraError ? (
         <p className="qrs__error" role="alert">
-          {cameraError}
+          {cameraError.message}
         </p>
       ) : null}
       {error ? (

@@ -298,6 +298,28 @@ describe('camera errors', () => {
     });
   });
 
+  test('mutations without a live track reject CAMERA_UNAVAILABLE and report it', async () => {
+    const emptyStream = { getTracks: () => [], getVideoTracks: () => [] } as unknown as MediaStream;
+    const { video } = stubCamera({ media: async () => emptyStream });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+    const errors: QrStreamError[] = [];
+    controller.onError((error) => errors.push(error));
+
+    await expect(controller.setZoom(2)).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_UNAVAILABLE',
+      recovery: 'change-camera',
+    });
+    await expect(controller.applyConstraints({ width: { ideal: 640 } })).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_UNAVAILABLE',
+      recovery: 'change-camera',
+    });
+
+    expect(errors.map((error) => error.code)).toEqual(['CAMERA_UNAVAILABLE', 'CAMERA_UNAVAILABLE']);
+    controller.stop();
+  });
+
   test('select rejects a coded CameraError and reports it', async () => {
     const first = fakeStream(fakeTrack('cam-1', () => undefined));
     let calls = 0;

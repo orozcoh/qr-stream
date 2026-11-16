@@ -5,6 +5,7 @@
     "src/browser.ts",
     "src/qr.ts",
     "src/react/index.ts",
+    "tests/react18/ref.tsx",
     "src/browser/decoders/zxing.ts",
     "scripts/release.mjs"
   ],
