@@ -1,3 +1,4 @@
+import { QrStreamError } from '../core/errors.js';
 import type { QrMatrix } from './matrix.js';
 
 export interface RasterImage {
@@ -15,7 +16,7 @@ export interface RasterImage {
  */
 export function matrixToRGBA(matrix: QrMatrix, scale: number, quietZone = 4): RasterImage {
   if (!Number.isInteger(scale) || scale < 1) {
-    throw new RangeError(`scale must be a positive integer, got ${scale}`);
+    throw new QrStreamError('INVALID_SCALE', `scale must be a positive integer, got ${scale}`);
   }
 
   const modules = matrix.size + quietZone * 2;

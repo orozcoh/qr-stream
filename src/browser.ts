@@ -1,3 +1,4 @@
+export { CameraError, DecoderError, RenderError, isQrStreamError } from './core/errors.js';
 export type { FrameDecoder } from './browser/decoder.js';
 export {
   renderQrStream,

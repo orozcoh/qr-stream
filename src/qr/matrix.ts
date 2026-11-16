@@ -1,5 +1,6 @@
 import qrcode from 'qrcode-generator';
 import { qrCapacity } from '../core/capacity.js';
+import { QrStreamError } from '../core/errors.js';
 
 export { qrCapacity } from '../core/capacity.js';
 
@@ -33,7 +34,10 @@ function toLatin1(bytes: Uint8Array): string {
 export function packetToMatrix(packet: Uint8Array, version: number): QrMatrix {
   const capacity = qrCapacity(version);
   if (packet.length > capacity) {
-    throw new RangeError(`packet is ${packet.length} bytes; version ${version}-L holds ${capacity}`);
+    throw new QrStreamError(
+      'PACKET_TOO_LARGE',
+      `packet is ${packet.length} bytes; version ${version}-L holds ${capacity}`,
+    );
   }
 
   const knownGood = qrcode.stringToBytes;
@@ -48,9 +52,11 @@ export function packetToMatrix(packet: Uint8Array, version: number): QrMatrix {
     qr = qrcode(version as Parameters<typeof qrcode>[0], 'L');
     qr.addData(toLatin1(packet), 'Byte');
     qr.make();
-  } catch (error) {
-    throw new RangeError(
-      `packet does not fit QR version ${version}: ${error instanceof Error ? error.message : String(error)}`,
+  } catch (cause) {
+    throw new QrStreamError(
+      'INVALID_QR_VERSION',
+      `packet does not fit QR version ${version}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
     );
   } finally {
     qrcode.stringToBytes = knownGood;
@@ -58,7 +64,7 @@ export function packetToMatrix(packet: Uint8Array, version: number): QrMatrix {
 
   const size = qr.getModuleCount();
   if (size !== version * 4 + 17) {
-    throw new Error(`encoder produced version ${(size - 17) / 4}, expected ${version}`);
+    throw new QrStreamError('INVALID_QR_VERSION', `encoder produced version ${(size - 17) / 4}, expected ${version}`);
   }
 
   return {

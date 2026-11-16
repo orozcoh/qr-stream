@@ -1,6 +1,7 @@
 import { MAX_FRAME_PAYLOAD, qrCapacity } from './capacity.js';
 import { gunzip } from './compress.js';
 import { NONCE_BYTES, SALT_BYTES, decryptBytes } from './crypto.js';
+import { PayloadTooLargeError, QrStreamError } from './errors.js';
 import { FountainDecoder } from './fountain.js';
 import { decodeMeta, readVarint, type StreamMeta } from './meta.js';
 import { FLAG_ENCRYPTED, FLAG_GZIP, decodePacket } from './packet.js';
@@ -47,8 +48,27 @@ const MAX_STREAM_BYTES = MAX_INPUT_BYTES + MAX_META_OVERHEAD + GCM_TAG_BYTES;
  */
 export const MAX_SOURCE_BLOCKS = Math.ceil(MAX_STREAM_BYTES / MIN_PRESET_BLOCK_SIZE);
 
-async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+/** Fail before a crypto call that would otherwise surface an opaque TypeError. */
+function requireWebCrypto(): Crypto {
+  const api = (globalThis as { crypto?: Crypto }).crypto;
+  if (!api?.subtle) {
+    throw new QrStreamError(
+      'UNSUPPORTED_RUNTIME',
+      'Web Crypto is not available; use a secure context in a modern browser',
+      {
+        recovery: 'upgrade-browser',
+      },
+    );
+  }
+  return api;
+}
+
+async function sha256(api: Crypto, bytes: Uint8Array): Promise<Uint8Array> {
+  try {
+    return new Uint8Array(await api.subtle.digest('SHA-256', bytes as BufferSource));
+  } catch (cause) {
+    throw new QrStreamError('CRYPTO_FAILED', 'failed to hash the payload', { cause, recovery: 'retry' });
+  }
 }
 
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
@@ -119,20 +139,30 @@ export function createQrStreamReader(): QrStreamReader {
 
     try {
       const { value: metaLen, next } = readVarint(bytes, 0);
-      if (metaLen > bytes.length - next) throw new RangeError('metadata length exceeds payload');
+      if (metaLen > bytes.length - next) {
+        throw new QrStreamError('INVALID_METADATA', 'metadata length exceeds payload', { recovery: 'rescan' });
+      }
       const parsed = decodeMeta(bytes.subarray(next, next + metaLen));
 
-      if (parsed.plainLen > MAX_INPUT_BYTES) throw new RangeError('advertised size exceeds the limit');
-      if (parsed.iterations > MAX_KDF_ITERATIONS) throw new RangeError('absurd KDF iteration count');
+      if (parsed.plainLen > MAX_INPUT_BYTES) {
+        throw new PayloadTooLargeError('decoded', parsed.plainLen, MAX_INPUT_BYTES);
+      }
+      if (parsed.iterations > MAX_KDF_ITERATIONS) {
+        throw new QrStreamError('INVALID_METADATA', 'absurd KDF iteration count', { recovery: 'rescan' });
+      }
 
       const bodyLen = bytes.length - next - metaLen;
       const encrypted = (lockedFlags & FLAG_ENCRYPTED) !== 0;
       const requiredWire = parsed.wireLen + (encrypted ? GCM_TAG_BYTES : 0);
-      if (requiredWire > bodyLen) throw new RangeError('wire length exceeds payload');
+      if (requiredWire > bodyLen) {
+        throw new QrStreamError('PAYLOAD_CORRUPT', 'wire length exceeds payload', { recovery: 'rescan' });
+      }
 
       if (encrypted) {
         if (parsed.salt?.length !== SALT_BYTES || parsed.nonce?.length !== NONCE_BYTES || parsed.iterations < 1) {
-          throw new RangeError('invalid encryption parameters in metadata');
+          throw new QrStreamError('INVALID_METADATA', 'invalid encryption parameters in metadata', {
+            recovery: 'rescan',
+          });
         }
       }
 
@@ -188,6 +218,7 @@ export function createQrStreamReader(): QrStreamReader {
       if (assembled === null || meta === null) return null;
       if (cachedResult !== null) return cachedResult;
 
+      const api = requireWebCrypto();
       const myGeneration = generation;
       const parsed = meta;
       const bytes = assembled;
@@ -214,15 +245,25 @@ export function createQrStreamReader(): QrStreamReader {
       const data = (lockedFlags & FLAG_GZIP) !== 0 ? await gunzip(wire) : wire;
       if (generation !== myGeneration) return null;
 
-      if (data.length > MAX_INPUT_BYTES) throw new RangeError('decoded payload exceeds the size limit');
+      if (data.length > MAX_INPUT_BYTES) {
+        throw new PayloadTooLargeError('decoded', data.length, MAX_INPUT_BYTES);
+      }
       if (data.length !== parsed.plainLen) {
-        throw new RangeError('decoded length does not match metadata plainLen');
+        throw new QrStreamError('PAYLOAD_CORRUPT', 'decoded length does not match metadata plainLen', {
+          recovery: 'rescan',
+        });
       }
 
-      const digest = await sha256(data);
+      const digest = await sha256(api, data);
       if (generation !== myGeneration) return null;
       if (!sameBytes(digest, parsed.sha256)) {
-        throw new Error('payload checksum mismatch: the transfer is corrupt, scan it again');
+        throw new QrStreamError(
+          'PAYLOAD_CORRUPT',
+          'payload checksum mismatch: the transfer is corrupt, scan it again',
+          {
+            recovery: 'rescan',
+          },
+        );
       }
 
       cachedResult = { data, meta: parsed };

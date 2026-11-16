@@ -1,3 +1,4 @@
+import { RenderError } from '../core/errors.js';
 import { packetToMatrix } from '../qr/matrix.js';
 import { matrixToRGBA } from '../qr/raster.js';
 
@@ -65,11 +66,11 @@ export function renderQrStream(options: RenderOptions): RenderController {
   const { canvas, packets, version } = options;
   const refreshHz = options.refreshHz ?? 60;
   const context = canvas.getContext('2d');
-  if (context === null) throw new Error('canvas 2d context unavailable');
+  if (context === null) throw new RenderError('canvas 2d context unavailable');
 
   const source = document.createElement('canvas');
   const sourceContext = source.getContext('2d');
-  if (sourceContext === null) throw new Error('offscreen 2d context unavailable');
+  if (sourceContext === null) throw new RenderError('offscreen 2d context unavailable');
 
   let fps = quantizeFps(options.fps, refreshHz);
   let painted = 0;

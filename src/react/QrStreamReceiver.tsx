@@ -252,7 +252,7 @@ export function QrStreamReceiver({
       ) : null}
       {error ? (
         <p className="qrs__error" role="alert">
-          {error}
+          {error.message}
         </p>
       ) : null}
     </div>

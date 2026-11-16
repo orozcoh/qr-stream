@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { QrStreamError, isQrStreamError } from '../core/errors.js';
 import type { PresetName } from '../core/types.js';
 import { createQrStreamWriter, type QrStreamWriter } from '../core/writer.js';
 
@@ -11,7 +12,7 @@ export interface UseQrStreamWriterOptions {
 
 export interface UseQrStreamWriterResult {
   writer: QrStreamWriter | null;
-  error: Error | null;
+  error: QrStreamError | null;
   /** True while a writer for the current settings is being rebuilt. */
   pending: boolean;
 }
@@ -33,7 +34,7 @@ export function useQrStreamWriter(options: UseQrStreamWriterOptions): UseQrStrea
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the values are identity inputs, not memo inputs
   const settingsKey = useMemo(() => ({}), [data, filename, preset, passphrase]);
   const [state, setState] = useState<WriterState | null>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<QrStreamError | null>(null);
 
   useEffect(() => {
     setError(null);
@@ -54,7 +55,8 @@ export function useQrStreamWriter(options: UseQrStreamWriterOptions): UseQrStrea
       .catch((cause: unknown) => {
         if (!cancelled) {
           setState(null);
-          setError(cause instanceof Error ? cause : new Error(String(cause)));
+          // Never wrap a library error: its code and recovery are the contract.
+          setError(isQrStreamError(cause) ? cause : new QrStreamError('INVALID_ARGUMENT', String(cause), { cause }));
         }
       });
 

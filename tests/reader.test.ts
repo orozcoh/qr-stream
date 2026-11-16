@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { WrongKeyError } from '../src/core/crypto';
+import { WrongKeyError } from '../src/core/errors';
 import { decodePacket, encodePacket } from '../src/core/packet';
 import { createQrStreamReader } from '../src/core/reader';
 import { createQrStreamWriter } from '../src/core/writer';
@@ -104,7 +104,7 @@ describe('createQrStreamReader', () => {
     reader.add(encodePacket({ ...head, payload }));
 
     for (const p of packets.slice(1)) reader.add(p);
-    await expect(reader.result()).rejects.toBeTruthy();
+    await expect(reader.result()).rejects.toMatchObject({ code: 'PAYLOAD_CORRUPT', recovery: 'rescan' });
   });
 
   test('tampering with an encrypted filename fails authentication', async () => {

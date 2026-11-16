@@ -1,3 +1,4 @@
+import { CameraError } from '../core/errors.js';
 import type { FrameDecoder } from './decoder.js';
 
 export interface CameraDevice {
@@ -89,7 +90,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (context === null) throw new Error('2d context unavailable for decoding');
+  if (context === null) throw new CameraError('CAMERA_UNAVAILABLE', '2d context unavailable for decoding');
 
   let stream: MediaStream | null = null;
   let tracks: CameraDevice[] = [];

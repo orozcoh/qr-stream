@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { WrongKeyError, decryptBytes, encryptBytes } from '../src/core/crypto';
+import { decryptBytes, encryptBytes } from '../src/core/crypto';
+import { WrongKeyError } from '../src/core/errors';
 
 const ITERATIONS = 1000;
 

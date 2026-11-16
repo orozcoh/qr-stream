@@ -1,10 +1,4 @@
-/** Raised whenever AES-GCM authentication fails — a wrong key or a damaged payload. */
-export class WrongKeyError extends Error {
-  constructor(message = 'The passphrase does not match this transfer, or the payload is damaged.') {
-    super(message);
-    this.name = 'WrongKeyError';
-  }
-}
+import { WrongKeyError } from './errors.js';
 
 export const DEFAULT_ITERATIONS = 600_000;
 export const SALT_BYTES = 16;

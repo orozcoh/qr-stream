@@ -1,4 +1,5 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
+import { DecoderError } from '../../core/errors.js';
 import type { FrameDecoder } from '../decoder.js';
 
 export interface ZXingDecoderOptions {
@@ -23,12 +24,21 @@ export async function createZXingDecoder(options: ZXingDecoderOptions = {}): Pro
   const { wasmUrl } = options;
 
   if (wasmUrl) {
-    await prepareZXingModule({ overrides: { locateFile: () => wasmUrl } });
+    try {
+      await prepareZXingModule({ overrides: { locateFile: () => wasmUrl } });
+    } catch (cause) {
+      throw new DecoderError('the ZXing wasm module could not be prepared', { cause });
+    }
   }
 
   return {
     async decode(image: ImageData): Promise<Uint8Array | null> {
-      const results = await readBarcodes(image, { formats: ['QRCode'] });
+      let results: Awaited<ReturnType<typeof readBarcodes>>;
+      try {
+        results = await readBarcodes(image, { formats: ['QRCode'] });
+      } catch (cause) {
+        throw new DecoderError('the QR decoder failed to read a frame', { cause });
+      }
       for (const result of results) {
         if (result.isValid && result.bytes.length > 0) return result.bytes;
       }

@@ -1,6 +1,7 @@
 import { qrCapacity } from './capacity.js';
 import { gzipIfSmaller } from './compress.js';
 import { DEFAULT_ITERATIONS, NONCE_BYTES, SALT_BYTES, encryptBytes } from './crypto.js';
+import { PayloadTooLargeError, QrStreamError, isQrStreamError } from './errors.js';
 import { encodeSymbol } from './fountain.js';
 import { encodeMeta, sanitizeFilename, writeVarint, type StreamMeta } from './meta.js';
 import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet.js';
@@ -26,8 +27,43 @@ export interface QrStreamWriter {
   packets(): AsyncGenerator<Uint8Array>;
 }
 
-async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+/** Fail before a crypto call that would otherwise surface an opaque TypeError. */
+function requireWebCrypto(): Crypto {
+  const api = (globalThis as { crypto?: Crypto }).crypto;
+  if (!api?.subtle || typeof api.getRandomValues !== 'function') {
+    throw new QrStreamError(
+      'UNSUPPORTED_RUNTIME',
+      'Web Crypto is not available; use a secure context in a modern browser',
+      {
+        recovery: 'upgrade-browser',
+      },
+    );
+  }
+  return api;
+}
+
+async function sha256(api: Crypto, bytes: Uint8Array): Promise<Uint8Array> {
+  try {
+    return new Uint8Array(await api.subtle.digest('SHA-256', bytes as BufferSource));
+  } catch (cause) {
+    throw new QrStreamError('CRYPTO_FAILED', 'failed to hash the payload', { cause, recovery: 'retry' });
+  }
+}
+
+function randomBytes(api: Crypto, length: number): Uint8Array {
+  try {
+    return api.getRandomValues(new Uint8Array(length));
+  } catch (cause) {
+    throw new QrStreamError('CRYPTO_FAILED', 'failed to generate random bytes', { cause, recovery: 'retry' });
+  }
+}
+
+function randomSessionId(api: Crypto): number {
+  try {
+    return api.getRandomValues(new Uint32Array(1))[0] ?? 1;
+  } catch (cause) {
+    throw new QrStreamError('CRYPTO_FAILED', 'failed to generate a session id', { cause, recovery: 'retry' });
+  }
 }
 
 /**
@@ -38,10 +74,11 @@ async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
  */
 export async function createQrStreamWriter(data: Uint8Array, options: WriterOptions): Promise<QrStreamWriter> {
   if (data.length > MAX_INPUT_BYTES) {
-    throw new RangeError(`input is ${data.length} bytes; the limit is ${MAX_INPUT_BYTES}`);
+    throw new PayloadTooLargeError('input', data.length, MAX_INPUT_BYTES);
   }
 
-  const digest = await sha256(data);
+  const api = requireWebCrypto();
+  const digest = await sha256(api, data);
   const compressed = await gzipIfSmaller(data);
 
   // Normalise before deciding: a passphrase of spaces would otherwise enable
@@ -52,8 +89,8 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
 
   // Generate the salt and nonce before the metadata block so the exact encoded
   // metadata can be passed as AES-GCM additional authenticated data.
-  const salt = hasKey ? crypto.getRandomValues(new Uint8Array(SALT_BYTES)) : undefined;
-  const nonce = hasKey ? crypto.getRandomValues(new Uint8Array(NONCE_BYTES)) : undefined;
+  const salt = hasKey ? randomBytes(api, SALT_BYTES) : undefined;
+  const nonce = hasKey ? randomBytes(api, NONCE_BYTES) : undefined;
 
   const meta: StreamMeta = {
     filename: sanitizeFilename(options.filename),
@@ -66,13 +103,19 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
   };
 
   const metaBytes = encodeMeta(meta);
-  const encrypted = hasKey
-    ? await encryptBytes(compressed.data, passphrase, DEFAULT_ITERATIONS, {
+  let encrypted: Awaited<ReturnType<typeof encryptBytes>> | null = null;
+  if (hasKey) {
+    try {
+      encrypted = await encryptBytes(compressed.data, passphrase, DEFAULT_ITERATIONS, {
         salt,
         nonce,
         additionalData: metaBytes,
-      })
-    : null;
+      });
+    } catch (cause) {
+      if (isQrStreamError(cause)) throw cause;
+      throw new QrStreamError('CRYPTO_FAILED', 'failed to encrypt the payload', { cause, recovery: 'retry' });
+    }
+  }
 
   const metaLength = writeVarint(metaBytes.length);
   const wireBytes = encrypted?.ciphertext ?? compressed.data;
@@ -93,7 +136,7 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
   }
 
   const flags = (compressed.gzipped ? FLAG_GZIP : 0) | (encrypted ? FLAG_ENCRYPTED : 0);
-  const sessionId = options.sessionId ?? crypto.getRandomValues(new Uint32Array(1))[0] ?? 1;
+  const sessionId = options.sessionId ?? randomSessionId(api);
 
   return {
     sessionId,

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { WrongKeyError } from '../core/crypto.js';
+import { QrStreamError, WrongKeyError, isQrStreamError } from '../core/errors.js';
 import type { StreamMeta } from '../core/meta.js';
 import { createQrStreamReader } from '../core/reader.js';
 
@@ -15,7 +15,7 @@ export interface UseQrStreamReaderResult {
   wrongKey: boolean;
   /** Frames from a different transfer keep arriving while this one is stuck. */
   stale: boolean;
-  error: string | null;
+  error: QrStreamError | null;
   add(bytes: Uint8Array): void;
   retryKey(passphrase: string): Promise<void>;
   reset(): void;
@@ -46,7 +46,7 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
   const [result, setResult] = useState<{ data: Uint8Array; meta: StreamMeta } | null>(null);
   const [wrongKey, setWrongKey] = useState(false);
   const [stale, setStale] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<QrStreamError | null>(null);
 
   const finish = useCallback(async (passphrase: string | undefined) => {
     // One derivation at a time: a burst of frames arriving together must not
@@ -67,12 +67,16 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
       if (epochRef.current !== myEpoch) return;
       if (cause instanceof WrongKeyError) {
         setWrongKey(true);
-        setError('That passphrase does not match. Try again — no need to rescan.');
+        setError(cause);
       } else {
         // A checksum or decompression failure will fail identically forever;
         // retrying it at camera frame rate would spin.
         failedHardRef.current = true;
-        setError(cause instanceof Error ? cause.message : String(cause));
+        setError(
+          isQrStreamError(cause)
+            ? cause
+            : new QrStreamError('INVALID_ARGUMENT', cause instanceof Error ? cause.message : String(cause), { cause }),
+        );
       }
     } finally {
       finishingRef.current = false;

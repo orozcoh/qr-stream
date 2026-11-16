@@ -78,6 +78,6 @@ describe('render / decode loopback', () => {
 
   test('a fractional scale is refused', () => {
     const matrix = { version: 20, size: 97, get: () => false };
-    expect(() => matrixToRGBA(matrix, 2.5)).toThrow(RangeError);
+    expect(() => matrixToRGBA(matrix, 2.5)).toThrow(expect.objectContaining({ code: 'INVALID_SCALE' }));
   });
 });

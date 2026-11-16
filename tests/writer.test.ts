@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { QrStreamError } from '../src/core/errors';
 import { decodeMeta } from '../src/core/meta';
 import { readVarint } from '../src/core/meta';
 import { decodePacket } from '../src/core/packet';
@@ -84,9 +85,12 @@ describe('createQrStreamWriter', () => {
   });
 
   test('rejects input over the cap', async () => {
-    await expect(
-      createQrStreamWriter(new Uint8Array(MAX_INPUT_BYTES + 1), { filename: 'huge.json', preset: 'fast' }),
-    ).rejects.toBeInstanceOf(RangeError);
+    const pending = createQrStreamWriter(new Uint8Array(MAX_INPUT_BYTES + 1), {
+      filename: 'huge.json',
+      preset: 'fast',
+    });
+    await expect(pending).rejects.toBeInstanceOf(QrStreamError);
+    await expect(pending).rejects.toMatchObject({ code: 'INPUT_TOO_LARGE', scope: 'input', recovery: 'change-input' });
   });
 
   test('accepts exactly the cap', async () => {

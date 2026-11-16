@@ -1,3 +1,5 @@
+import { QrStreamError } from './errors.js';
+
 export interface StreamMeta {
   /** Original file name, at most 64 UTF-8 bytes. */
   filename: string;
@@ -42,6 +44,10 @@ function truncateUtf8(text: string, maxBytes: number): Uint8Array {
   return full.subarray(0, end);
 }
 
+function invalidMetadata(message: string): QrStreamError {
+  return new QrStreamError('INVALID_METADATA', message, { recovery: 'rescan' });
+}
+
 export function writeVarint(value: number): Uint8Array {
   const out: number[] = [];
   let rest = value;
@@ -59,16 +65,16 @@ export function readVarint(bytes: Uint8Array, offset: number): { value: number; 
   let shift = 1;
   let cursor = offset;
   for (;;) {
-    if (cursor >= bytes.length) throw new RangeError('truncated varint');
+    if (cursor >= bytes.length) throw invalidMetadata('truncated varint');
     const byte = bytes[cursor] as number;
     // A zero final byte after a continuation is a non-canonical encoding of a
     // smaller value. Rejecting it keeps every parser reading one shape.
-    if (cursor > offset && byte === 0) throw new RangeError('non-canonical varint');
+    if (cursor > offset && byte === 0) throw invalidMetadata('non-canonical varint');
     value += (byte & 0x7f) * shift;
     shift *= 128;
     cursor += 1;
     if ((byte & 0x80) === 0) break;
-    if (shift > 2 ** 49) throw new RangeError('varint too large');
+    if (shift > 2 ** 49) throw invalidMetadata('varint too large');
   }
   return { value, next: cursor };
 }
@@ -96,7 +102,9 @@ export function encodeMeta(meta: StreamMeta): Uint8Array {
   view.setUint32(offset, meta.wireLen);
   offset += 4;
 
-  if (meta.sha256.length !== SHA256_BYTES) throw new RangeError('sha256 must be 32 bytes');
+  if (meta.sha256.length !== SHA256_BYTES) {
+    throw new QrStreamError('INVALID_ARGUMENT', 'sha256 must be 32 bytes');
+  }
   out.set(meta.sha256, offset);
   offset += SHA256_BYTES;
 
@@ -119,12 +127,16 @@ export function decodeMeta(bytes: Uint8Array): StreamMeta {
   let offset = 0;
 
   const need = (count: number): void => {
-    if (offset + count > bytes.length) throw new RangeError('metadata block truncated');
+    if (offset + count > bytes.length) throw invalidMetadata('metadata block truncated');
   };
 
   need(1);
   const version = bytes[offset] as number;
-  if (version !== META_VERSION) throw new RangeError(`unsupported metadata version ${version}`);
+  if (version !== META_VERSION) {
+    throw new QrStreamError('UNSUPPORTED_VERSION', `unsupported metadata version ${version}`, {
+      recovery: 'upgrade-library',
+    });
+  }
   offset += 1;
 
   need(1);
@@ -162,7 +174,7 @@ export function decodeMeta(bytes: Uint8Array): StreamMeta {
   const iterations = view.getUint32(offset);
   offset += 4;
 
-  if (offset !== bytes.length) throw new RangeError('trailing bytes in metadata block');
+  if (offset !== bytes.length) throw invalidMetadata('trailing bytes in metadata block');
 
   return { filename, plainLen, wireLen, sha256, salt, nonce, iterations };
 }
