@@ -10,5 +10,6 @@
     "scripts/release.mjs"
   ],
   "ignoreDependencies": ["@types/emscripten", "zxing-wasm"],
+  "ignore": ["tests/fixtures/v0.2/**"],
   "ignoreExportsUsedInFile": { "interface": true }
 }

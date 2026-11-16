@@ -10,7 +10,25 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'demo/dist/**', 'coverage/**', 'node_modules/**', 'docs/**'],
+    ignores: [
+      'dist/**',
+      'demo/dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'docs/**',
+      // Frozen 0.2.0 test fixture; formatting must not churn it.
+      'tests/fixtures/v0.2/capacity.ts',
+      'tests/fixtures/v0.2/compress.ts',
+      'tests/fixtures/v0.2/crc32.ts',
+      'tests/fixtures/v0.2/crypto.ts',
+      'tests/fixtures/v0.2/fountain.ts',
+      'tests/fixtures/v0.2/meta.ts',
+      'tests/fixtures/v0.2/packet.ts',
+      'tests/fixtures/v0.2/prng.ts',
+      'tests/fixtures/v0.2/reader.ts',
+      'tests/fixtures/v0.2/types.ts',
+      'tests/fixtures/v0.2/writer.ts',
+    ],
   },
   {
     // Node-context files (config, scripts) run outside the browser.

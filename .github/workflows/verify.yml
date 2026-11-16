@@ -48,6 +48,11 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Fuzz
+        run: pnpm test:fuzz
+        env:
+          FUZZ_RUNS: 1000
+
       - name: Coverage
         run: pnpm test:coverage
 

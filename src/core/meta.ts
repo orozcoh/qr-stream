@@ -148,7 +148,11 @@ export function decodeMeta(bytes: Uint8Array): StreamMeta {
   const filenameLen = bytes[offset] as number;
   offset += 1;
   need(filenameLen);
-  const filename = sanitizeFilename(new TextDecoder().decode(bytes.subarray(offset, offset + filenameLen)));
+  const decodedName = sanitizeFilename(new TextDecoder().decode(bytes.subarray(offset, offset + filenameLen)));
+  // A peer can send invalid UTF-8, and each invalid byte decodes to a 3-byte
+  // replacement character. Re-truncate after decoding so the documented
+  // 64-byte filename bound holds for input as well as output.
+  const filename = new TextDecoder().decode(truncateUtf8(decodedName, MAX_FILENAME_BYTES));
   offset += filenameLen;
 
   need(8);
