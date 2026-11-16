@@ -7,6 +7,8 @@ export {
   RenderError,
   WrongKeyError,
   isQrStreamError,
+  type CameraErrorCode,
+  type PayloadScope,
   type QrStreamErrorCode,
   type QrStreamErrorOptions,
   type QrStreamRecovery,

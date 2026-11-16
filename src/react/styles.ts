@@ -310,6 +310,11 @@ const STYLE_ID = 'qr-stream-styles';
 
 let injected = false;
 
+/**
+ * Inject the component stylesheet once per document.
+ *
+ * @internal
+ */
 export function ensureQrStreamStyles(): void {
   if (injected) return;
   if (typeof document === 'undefined') return;

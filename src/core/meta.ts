@@ -29,6 +29,11 @@ const SHA256_BYTES = 32;
 // eslint-disable-next-line no-control-regex -- the class must strip control and bidi characters
 const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069/\\]/g;
 
+/**
+ * Strip a peer-supplied filename down to something safe to render and save.
+ *
+ * @internal
+ */
 export function sanitizeFilename(name: string): string {
   const cleaned = name.replace(UNSAFE_FILENAME_CHARS, '').trim();
   return cleaned.length > 0 ? cleaned : 'payload';

@@ -47,9 +47,18 @@ export interface QrStreamErrorOptions {
   recovery?: QrStreamRecovery;
 }
 
-type PayloadScope = 'input' | 'wire' | 'decoded';
+/**
+ * Which budget a {@link PayloadTooLargeError} exceeded. `input` is the raw
+ * file, `wire` is the compressed body the sender transmits, and `decoded` is
+ * what the reader materializes after decompression.
+ */
+export type PayloadScope = 'input' | 'wire' | 'decoded';
 
-type CameraErrorCode = Extract<
+/**
+ * The subset of codes a {@link CameraError} may carry. Narrow enough that a
+ * host can switch on it without re-checking for non-camera failures.
+ */
+export type CameraErrorCode = Extract<
   QrStreamErrorCode,
   | 'CAMERA_PERMISSION_DENIED'
   | 'CAMERA_NOT_FOUND'

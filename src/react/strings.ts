@@ -141,6 +141,8 @@ export function defaultFormatError(error: QrStreamError): string {
 /**
  * Merge host overrides over the defaults, treating `undefined` as absent so
  * `{ start: undefined }` does not blank out "Start stream".
+ *
+ * @internal
  */
 export function resolveQrStreamStrings(overrides?: Partial<QrStreamStrings>): QrStreamStrings {
   const resolved: QrStreamStrings = { ...DEFAULT_QR_STREAM_STRINGS };

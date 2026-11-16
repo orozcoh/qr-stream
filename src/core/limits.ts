@@ -1,13 +1,19 @@
 import { QrStreamError } from './errors.js';
 import { MAX_DECODED_BYTES, MAX_INPUT_BYTES, MAX_WIRE_BYTES, type ReaderLimits, type TransferLimits } from './types.js';
 
-/** AES-GCM authentication tag appended to an encrypted wire body. */
+/**
+ * AES-GCM authentication tag appended to an encrypted wire body.
+ *
+ * @internal
+ */
 export const GCM_TAG_BYTES = 16;
 
 /**
  * Upper bound on the encoded metadata block plus its varint length prefix.
  * Shared by the writer's defensive payload check and the reader's plausibility
  * bound so both sides budget the same overhead.
+ *
+ * @internal
  */
 export const MAX_META_OVERHEAD = 256;
 
@@ -34,6 +40,11 @@ function resolveLimit(name: string, value: number | undefined, fallback: number,
   return value;
 }
 
+/**
+ * Validate the sender's budgets, filling in the hard defaults.
+ *
+ * @internal
+ */
 export function resolveTransferLimits(limits: TransferLimits = {}): ResolvedTransferLimits {
   return {
     maxWireBytes: resolveLimit('maxWireBytes', limits.maxWireBytes, MAX_WIRE_BYTES, MAX_WIRE_BYTES),
@@ -41,6 +52,11 @@ export function resolveTransferLimits(limits: TransferLimits = {}): ResolvedTran
   };
 }
 
+/**
+ * Validate the reader's budgets, filling in the hard defaults.
+ *
+ * @internal
+ */
 export function resolveReaderLimits(limits: ReaderLimits = {}): ResolvedReaderLimits {
   return {
     maxWireBytes: resolveLimit('maxWireBytes', limits.maxWireBytes, MAX_WIRE_BYTES, MAX_WIRE_BYTES),

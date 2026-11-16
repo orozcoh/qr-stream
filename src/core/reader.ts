@@ -52,6 +52,8 @@ const MAX_STREAM_BYTES = MAX_WIRE_BYTES + MAX_META_OVERHEAD + GCM_TAG_BYTES;
  * Largest source-block count a legal stream can declare. At the smallest
  * preset a 1 MiB transfer needs ~1252 blocks; accepting the u16 limit (65535)
  * lets a 21-byte frame drive the fountain decoder's superlinear work.
+ *
+ * @internal
  */
 export const MAX_SOURCE_BLOCKS = Math.ceil(MAX_STREAM_BYTES / MIN_PRESET_BLOCK_SIZE);
 

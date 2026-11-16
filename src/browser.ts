@@ -1,4 +1,17 @@
-export { CameraError, DecoderError, RenderError, isQrStreamError } from './core/errors.js';
+export {
+  CameraError,
+  DecoderError,
+  QrStreamError,
+  RenderError,
+  isQrStreamError,
+  type CameraErrorCode,
+  type QrStreamErrorCode,
+  type QrStreamErrorOptions,
+  type QrStreamRecovery,
+} from './core/errors.js';
+export type { QrStreamWriter } from './core/writer.js';
+export type { StreamMeta } from './core/meta.js';
+export type { PresetName } from './core/types.js';
 export type { FrameDecoder } from './browser/decoder.js';
 export {
   renderQrStream,
@@ -18,3 +31,4 @@ export {
   type CameraDiagnostics,
   type ReadOptions,
 } from './browser/camera.js';
+export type { QrRgba, RasterOptions } from './qr/raster.js';

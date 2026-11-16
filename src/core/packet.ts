@@ -24,8 +24,11 @@ export interface Packet {
 
 /**
  * Encode a packet. Layout, big-endian:
- * `magic u16 | version u8 | flags u8 | sessionId u32 | symbolIdx u16 |
- *  k u16 | blockSize u16 | payloadLen u16 | payload | crc32 u32`
+ *
+ * ```text
+ * magic u16 | version u8 | flags u8 | sessionId u32 | symbolIdx u16 |
+ * k u16 | blockSize u16 | payloadLen u16 | payload | crc32 u32
+ * ```
  */
 export function encodePacket(packet: Packet): Uint8Array {
   const { payload } = packet;

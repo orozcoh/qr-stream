@@ -18,5 +18,9 @@ export function qrCapacity(version: number): number {
   return capacity;
 }
 
-/** Largest capacity any supported version offers, used to sanity-check peers. */
+/**
+ * Largest capacity any supported version offers, used to sanity-check peers.
+ *
+ * @internal
+ */
 export const MAX_FRAME_PAYLOAD = 2953;

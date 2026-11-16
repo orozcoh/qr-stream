@@ -1,7 +1,19 @@
 import { WrongKeyError } from './errors.js';
 
 export const DEFAULT_ITERATIONS = 600_000;
+
+/**
+ * Salt length for PBKDF2 key derivation.
+ *
+ * @internal
+ */
 export const SALT_BYTES = 16;
+
+/**
+ * AES-GCM nonce length.
+ *
+ * @internal
+ */
 export const NONCE_BYTES = 12;
 
 /** Spoken passphrases arrive with stray whitespace and inconsistent Unicode forms. */

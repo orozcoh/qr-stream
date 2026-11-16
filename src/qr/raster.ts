@@ -29,6 +29,11 @@ const DEFAULT_DARK: QrRgba = [0, 0, 0, 255];
 const DEFAULT_LIGHT: QrRgba = [255, 255, 255, 255];
 const DEFAULT_QUIET_ZONE = 4;
 
+/**
+ * The validated color and quiet-zone inputs `matrixToRGBA` paints with.
+ *
+ * @internal
+ */
 export interface ResolvedRasterOptions {
   quietZone: number;
   dark: QrRgba;
@@ -67,6 +72,8 @@ function resolveColor(name: string, value: QrRgba | undefined, fallback: QrRgba)
  * controller is created: the paint loop deliberately swallows per-frame
  * errors, so validation deferred to `matrixToRGBA` would leave the canvas
  * blank without ever telling the host. Not part of the public `qr` barrel.
+ *
+ * @internal
  */
 export function resolveRasterOptions(options: number | RasterOptions | undefined): ResolvedRasterOptions {
   if (typeof options === 'number') {

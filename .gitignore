@@ -16,3 +16,6 @@ skills-lock.json
 
 # pack artefacts
 *.tgz
+
+# API Extractor scratch space (reports under etc/ are committed)
+tmp/

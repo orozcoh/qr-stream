@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
@@ -67,5 +67,34 @@ describe('package metadata', () => {
       if (/from\s+['"][^'"]*\/qr\//.test(text)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('API report', () => {
+  // One committed report per public entry: the reports are the frozen surface,
+  // and `pnpm api:check` fails when a declaration drifts from them.
+  const reports: Record<string, string> = {
+    '.': 'qr-stream.api.md',
+    './browser': 'qr-stream-browser.api.md',
+    './qr': 'qr-stream-qr.api.md',
+    './react': 'qr-stream-react.api.md',
+    './browser/zxing': 'qr-stream-zxing.api.md',
+  };
+
+  test('every public entry has a committed API report', () => {
+    expect(
+      Object.keys(pkg.exports ?? {})
+        .filter((entry) => entry !== './package.json')
+        .sort(),
+    ).toEqual(Object.keys(reports).sort());
+    for (const report of Object.values(reports)) {
+      expect(existsSync(join(root, 'etc', report)), `etc/${report} is missing`).toBe(true);
+    }
+  });
+
+  test('the report scripts exist and run API Extractor', () => {
+    expect(pkg.scripts?.['api:build']).toContain('api-extractor run --local');
+    expect(pkg.scripts?.['api:check']).toContain('api-extractor run');
+    expect(pkg.scripts?.['api:check']).not.toContain('--local');
   });
 });

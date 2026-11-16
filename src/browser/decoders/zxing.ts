@@ -2,6 +2,8 @@ import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 import { DecoderError, QrStreamError } from '../../core/errors.js';
 import type { FrameDecoder } from '../decoder.js';
 
+export type { FrameDecoder };
+
 export interface ZXingDecoderOptions {
   /**
    * Location of `zxing_reader.wasm`. Required: the library's implicit CDN
