@@ -2,7 +2,7 @@ import { QrStreamError, RenderError } from '../core/errors.js';
 import { PRESETS } from '../core/types.js';
 import type { QrStreamWriter } from '../core/writer.js';
 import { packetToMatrix } from '../qr/matrix.js';
-import { matrixToRGBA } from '../qr/raster.js';
+import { matrixToRGBA, type RasterOptions } from '../qr/raster.js';
 
 /**
  * Snap a requested frame rate to a divisor of the display refresh rate.
@@ -51,6 +51,13 @@ export interface RenderBaseOptions {
   fps?: number;
   /** Display refresh rate used to quantise `fps`. Defaults to 60. */
   refreshHz?: number;
+  /**
+   * Target CSS width in pixels. Overrides the parent measurement and snaps
+   * down to an integer module scale, so the result may be slightly smaller.
+   */
+  size?: number;
+  /** Module and quiet-zone colors. Defaults to black on white. */
+  colors?: RasterOptions;
 }
 
 /**
@@ -121,7 +128,10 @@ const QUEUE_CAP = 3;
  */
 export function renderQrStream(options: RenderOptions): RenderController {
   const { packets, version, fps: requestedFps } = resolveStream(options);
-  const { canvas } = options;
+  const { canvas, size, colors } = options;
+  if (size !== undefined && (!Number.isFinite(size) || size <= 0)) {
+    throw new QrStreamError('INVALID_ARGUMENT', `size must be a positive finite number, got ${size}`);
+  }
   const refreshHz = options.refreshHz ?? 60;
   const context = canvas.getContext('2d');
   if (context === null) throw new RenderError('canvas 2d context unavailable');
@@ -173,29 +183,46 @@ export function renderQrStream(options: RenderOptions): RenderController {
 
     try {
       const matrix = packetToMatrix(packet, version);
-      const image = matrixToRGBA(matrix, 1);
+      const image = matrixToRGBA(matrix, 1, colors);
       source.width = image.width;
       source.height = image.height;
       sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
 
       const ratio = window.devicePixelRatio || 1;
-      // Measure the container, never the canvas: the canvas is sized to an exact
-      // integer multiple of the module grid, so its own CSS width is what we are
-      // about to change. Measuring it would feed the previous size back in.
-      const container = canvas.parentElement;
-      const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
-      const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
-      const scale = Math.max(1, Math.floor(targetWidth / image.width));
-      const size = image.width * scale;
+      let targetWidth: number;
+      if (size !== undefined) {
+        // An explicit size wins over the parent. Never measure the canvas back:
+        // its CSS size is exactly what this frame is about to change.
+        targetWidth = Math.max(image.width, Math.floor(size * ratio));
+      } else {
+        // Measure the container, never the canvas: the canvas is sized to an
+        // exact integer multiple of the module grid, so its own CSS width is
+        // what we are about to change. Measuring it would feed the previous
+        // size back in.
+        const container = canvas.parentElement;
+        const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
+        targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
+      }
 
-      if (canvas.width !== size || canvas.height !== size) {
-        canvas.width = size;
-        canvas.height = size;
+      const scale = Math.max(1, Math.floor(targetWidth / image.width));
+      const bitmapSize = image.width * scale;
+
+      if (canvas.width !== bitmapSize || canvas.height !== bitmapSize) {
+        canvas.width = bitmapSize;
+        canvas.height = bitmapSize;
+      }
+
+      // Pin the CSS size to the exact bitmap extent so a host `max-width`
+      // cannot reintroduce fractional scaling.
+      if (size !== undefined && canvas.style !== undefined) {
+        const cssSize = `${bitmapSize / ratio}px`;
+        canvas.style.width = cssSize;
+        canvas.style.height = cssSize;
       }
 
       context.imageSmoothingEnabled = false;
-      context.clearRect(0, 0, size, size);
-      context.drawImage(source, 0, 0, size, size);
+      context.clearRect(0, 0, bitmapSize, bitmapSize);
+      context.drawImage(source, 0, 0, bitmapSize, bitmapSize);
 
       painted += 1;
     } finally {

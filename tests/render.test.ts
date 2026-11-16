@@ -32,8 +32,14 @@ interface RenderMocks {
   rafCallCount(): number;
 }
 
+interface RenderMockOptions {
+  parentClientWidth?: number;
+  devicePixelRatio?: number;
+  withStyle?: boolean;
+}
+
 /** Minimal 2D canvas plus a manually driven requestAnimationFrame. */
-function installRenderMocks(): RenderMocks {
+function installRenderMocks(options: RenderMockOptions = {}): RenderMocks {
   const context = {
     imageSmoothingEnabled: true,
     putImageData: vi.fn(),
@@ -41,12 +47,19 @@ function installRenderMocks(): RenderMocks {
     clearRect: vi.fn(),
   };
   const source = { width: 0, height: 0, getContext: () => context };
-  const canvas = { width: 0, height: 0, clientWidth: 300, parentElement: null, getContext: () => context };
+  const canvas = {
+    width: 0,
+    height: 0,
+    clientWidth: 300,
+    parentElement: options.parentClientWidth === undefined ? null : { clientWidth: options.parentClientWidth },
+    getContext: () => context,
+    style: options.withStyle === true ? {} : undefined,
+  };
   let rafCallback: FrameRequestCallback | null = null;
   let rafCalls = 0;
 
   vi.stubGlobal('document', { createElement: () => source });
-  vi.stubGlobal('window', { devicePixelRatio: 1 });
+  vi.stubGlobal('window', { devicePixelRatio: options.devicePixelRatio ?? 1 });
   vi.stubGlobal('ImageData', FakeImageData);
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     rafCallback = callback;
@@ -180,6 +193,123 @@ describe('renderQrStream writer mode', () => {
 
     expect(error).toBeInstanceOf(QrStreamError);
     expect((error as QrStreamError).code).toBe('INVALID_ARGUMENT');
+  });
+});
+
+describe('renderQrStream size and colors', () => {
+  test('size sets the bitmap and CSS size without fractional scaling', async () => {
+    // Version 20 is 97 modules; plus the 8-module quiet zone at scale 1.
+    const modules = 97 + 8;
+    const { canvas, step } = installRenderMocks({
+      parentClientWidth: 1000,
+      devicePixelRatio: 2,
+      withStyle: true,
+    });
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const controller = renderQrStream({ packets: packets(), canvas, fps: 15, version: 20, size: 280 });
+    controller.play();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    step(1);
+    step(100);
+
+    // 280 CSS px at ratio 2 allows 560 device px; the module grid snaps down.
+    expect(canvas.width).toBeGreaterThan(0);
+    expect(canvas.width % modules).toBe(0);
+    expect(canvas.width).toBeLessThanOrEqual(560);
+    expect(canvas.width).toBe(525);
+    expect(canvas.height).toBe(canvas.width);
+    expect(canvas.style.width).toBe(`${canvas.width / 2}px`);
+    expect(canvas.style.height).toBe(`${canvas.height / 2}px`);
+
+    controller.stop();
+  });
+
+  test('size overrides the parent measurement', async () => {
+    const { canvas, step } = installRenderMocks({
+      parentClientWidth: 4000,
+      devicePixelRatio: 2,
+      withStyle: true,
+    });
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const controller = renderQrStream({ packets: packets(), canvas, fps: 15, version: 20, size: 280 });
+    controller.play();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    step(1);
+    step(100);
+
+    // A 4000 px parent would ask for 8000 device px; size caps the request.
+    expect(canvas.width).toBeLessThanOrEqual(560);
+    controller.stop();
+  });
+
+  test('a canvas without a style object still renders', async () => {
+    const { canvas, step, context } = installRenderMocks({ devicePixelRatio: 2 });
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const controller = renderQrStream({ packets: packets(), canvas, fps: 15, version: 20, size: 280 });
+    controller.play();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    step(1);
+    step(100);
+
+    expect(canvas.width).toBe(525);
+    expect(context.drawImage).toHaveBeenCalled();
+    controller.stop();
+  });
+
+  test('rejects a non-positive or non-finite size', () => {
+    const { canvas } = installRenderMocks();
+
+    for (const size of [0, -10, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const error = catchError(() =>
+        renderQrStream({ canvas, fps: 5, version: 20, size, packets: (async function* () {})() }),
+      );
+
+      expect(error).toBeInstanceOf(QrStreamError);
+      expect((error as QrStreamError).code).toBe('INVALID_ARGUMENT');
+    }
+  });
+
+  test('colors reach the rasterizer', async () => {
+    const { context, canvas, step } = installRenderMocks();
+
+    async function* packets(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(20);
+    }
+
+    const controller = renderQrStream({
+      packets: packets(),
+      canvas,
+      fps: 15,
+      version: 20,
+      colors: { dark: [10, 20, 30, 255], light: [240, 230, 220, 255] },
+    });
+    controller.play();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    step(1);
+    step(100);
+
+    const image = context.putImageData.mock.calls[0]?.[0] as FakeImageData | undefined;
+    expect(image).toBeDefined();
+    // The light color fills the quiet zone.
+    expect(Array.from(image!.data.slice(0, 4))).toEqual([240, 230, 220, 255]);
+    // The top-left finder module carries the dark color after the quiet zone.
+    const width = image!.width;
+    const offset = (4 * width + 4) * 4;
+    expect(Array.from(image!.data.slice(offset, offset + 4))).toEqual([10, 20, 30, 255]);
+
+    controller.stop();
   });
 });
 
