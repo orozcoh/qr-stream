@@ -73,9 +73,6 @@ export function QrStreamReceiver({
     zoom,
     zoomValue,
     setZoom,
-    torchSupported,
-    torch,
-    setTorch,
   } = useCameraReader({
     onSymbol: add,
     createDecoder: decoder,
@@ -146,17 +143,6 @@ export function QrStreamReceiver({
           disabled={switching}
         >
           {switching ? text.switching : text.switchCamera}
-        </button>
-      ) : null}
-
-      {torchSupported ? (
-        <button
-          type="button"
-          className="qrs__button qrs__button--ghost"
-          aria-pressed={torch}
-          onClick={() => void setTorch(!torch)}
-        >
-          {torch ? text.torchOn : text.torchOff}
         </button>
       ) : null}
 

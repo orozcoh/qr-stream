@@ -14,8 +14,6 @@ export interface CameraCapabilities {
     // (undocumented)
     focusMode?: string[];
     // (undocumented)
-    torch?: boolean;
-    // (undocumented)
     zoom?: {
         min: number;
         max: number;
@@ -53,7 +51,7 @@ export class CameraError extends QrStreamError {
 }
 
 // @public
-export type CameraErrorCode = Extract<QrStreamErrorCode, 'CAMERA_PERMISSION_DENIED' | 'CAMERA_NOT_FOUND' | 'CAMERA_IN_USE' | 'CAMERA_UNAVAILABLE' | 'CAMERA_CONSTRAINTS_FAILED' | 'TORCH_UNSUPPORTED' | 'DECODER_FAILED'>;
+export type CameraErrorCode = Extract<QrStreamErrorCode, 'CAMERA_PERMISSION_DENIED' | 'CAMERA_NOT_FOUND' | 'CAMERA_IN_USE' | 'CAMERA_UNAVAILABLE' | 'CAMERA_CONSTRAINTS_FAILED' | 'DECODER_FAILED'>;
 
 // @public (undocumented)
 export class DecoderError extends QrStreamError {
@@ -134,7 +132,7 @@ export class QrStreamError extends Error {
 }
 
 // @public
-export type QrStreamErrorCode = 'INPUT_TOO_LARGE' | 'WIRE_TOO_LARGE' | 'DECODED_TOO_LARGE' | 'UNSUPPORTED_RUNTIME' | 'INVALID_ARGUMENT' | 'INVALID_QR_VERSION' | 'INVALID_SCALE' | 'PACKET_TOO_LARGE' | 'INVALID_PACKET' | 'INVALID_METADATA' | 'UNSUPPORTED_VERSION' | 'COMPRESSION_FAILED' | 'DECOMPRESSION_FAILED' | 'CRYPTO_FAILED' | 'WRONG_PASSPHRASE' | 'PAYLOAD_CORRUPT' | 'CAMERA_PERMISSION_DENIED' | 'CAMERA_NOT_FOUND' | 'CAMERA_IN_USE' | 'CAMERA_UNAVAILABLE' | 'CAMERA_CONSTRAINTS_FAILED' | 'TORCH_UNSUPPORTED' | 'DECODER_FAILED' | 'RENDER_FAILED';
+export type QrStreamErrorCode = 'INPUT_TOO_LARGE' | 'WIRE_TOO_LARGE' | 'DECODED_TOO_LARGE' | 'UNSUPPORTED_RUNTIME' | 'INVALID_ARGUMENT' | 'INVALID_QR_VERSION' | 'INVALID_SCALE' | 'PACKET_TOO_LARGE' | 'INVALID_PACKET' | 'INVALID_METADATA' | 'UNSUPPORTED_VERSION' | 'COMPRESSION_FAILED' | 'DECOMPRESSION_FAILED' | 'CRYPTO_FAILED' | 'WRONG_PASSPHRASE' | 'PAYLOAD_CORRUPT' | 'CAMERA_PERMISSION_DENIED' | 'CAMERA_NOT_FOUND' | 'CAMERA_IN_USE' | 'CAMERA_UNAVAILABLE' | 'CAMERA_CONSTRAINTS_FAILED' | 'DECODER_FAILED' | 'RENDER_FAILED';
 
 // @public (undocumented)
 export interface QrStreamErrorOptions {
@@ -259,10 +257,6 @@ export interface QrStreamStrings {
     tableLabel: string;
     // (undocumented)
     tableNumber: string;
-    // (undocumented)
-    torchOff: string;
-    // (undocumented)
-    torchOn: string;
     tryAgain: string;
     // (undocumented)
     unlock: string;
@@ -362,8 +356,6 @@ export interface UseCameraReaderResult {
     // (undocumented)
     select(id: string): Promise<void>;
     // (undocumented)
-    setTorch(on: boolean): Promise<void>;
-    // (undocumented)
     setZoom(value: number): Promise<void>;
     start(): Promise<void>;
     // (undocumented)
@@ -371,10 +363,6 @@ export interface UseCameraReaderResult {
     stop(): void;
     // (undocumented)
     switching: boolean;
-    // (undocumented)
-    torch: boolean;
-    // (undocumented)
-    torchSupported: boolean;
     // (undocumented)
     videoRef: QrVideoRef;
     // (undocumented)

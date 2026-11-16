@@ -286,14 +286,15 @@ Hooks, when you want your own layout:
 ```ts
 useQrStreamWriter({ data, filename, preset, passphrase, limits }) // { writer, error, pending }
 useQrStreamReader({ passphrase, limits })                         // { progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset }
-useCameraReader({ deviceId, onSymbol, createDecoder, enabled })   // { videoRef, devices, start, stop, error, torch, ... }
+useCameraReader({ deviceId, onSymbol, createDecoder, enabled })   // { videoRef, devices, start, stop, error, ... }
 ```
 
 All three report failures as a typed `QrStreamError | null`; branch on
 `error.code` and `error.recovery` rather than matching a message. `enabled`
 defaults to `true` and closes the camera when it turns `false`, while manual
-`start()`/`stop()` let a host drive the lifecycle itself. `useCameraReader` also
-exposes `torchSupported`, `torch`, and `setTorch(on)`.
+`start()`/`stop()` let a host drive the lifecycle itself. Torch is deliberately
+not exposed: the sender is a screen, so a torch adds glare. Use
+`applyConstraints(...)` for advanced platform-specific needs.
 
 `videoRef` is typed as `QrVideoRef`, a plain `{ current: HTMLVideoElement | null }`
 that is assignable to both React 18 and React 19 refs without a cast.

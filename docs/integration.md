@@ -203,10 +203,10 @@ type. A failed `start()` records the error on `error`; the hook resolves rather
 than rejecting, so `try { await start() } catch` never sees the failure. Handle
 the error state, not a rejection.
 
-The hook also exposes `torchSupported`, `torch`, and `setTorch(on)`. The
-controller's `setTorch` rejects with `TORCH_UNSUPPORTED` when the track has no
-torch capability; the hook records it on `error` instead. The component only
-renders the button when `torchSupported` is true.
+Torch is deliberately not exposed. The sender is a screen, so a torch adds
+glare rather than signal. If a host has a genuine platform-specific need, use
+the controller's `applyConstraints(...)` escape hatch and treat it as advanced,
+host-owned behavior.
 
 ### React 18 and React 19
 
@@ -425,7 +425,6 @@ Every branchable failure carries a `QrStreamErrorCode` and a
 | `CAMERA_IN_USE` | Another app holds the camera. | `change-camera` |
 | `CAMERA_UNAVAILABLE` | The camera could not be opened. | `change-camera` |
 | `CAMERA_CONSTRAINTS_FAILED` | The camera refused the requested constraints. | `change-camera` |
-| `TORCH_UNSUPPORTED` | The active track has no torch capability. | `none` |
 | `DECODER_FAILED` | Decoder construction or frame decoding failed. | `retry` |
 | `RENDER_FAILED` | A 2D canvas context was unavailable. | `none` |
 
@@ -628,9 +627,8 @@ Do this with the real devices, over the network path the users will have.
 6. **Stop and start.** Stop the sender: the last frame must disappear (not
    remain scannable). Stop the receiver: the camera light must go out. Start
    both again and finish a transfer.
-7. **Torch.** If the device offers `torchSupported`, toggle it over a dark
-   surface and confirm the preview brightens. If it does not, the control must
-   not appear.
+7. **Camera zoom.** If the device reports a zoom range, adjust it and confirm
+   the preview changes and the code still decodes.
 8. **Offline PWA.** Install the app on each device once while online. Then turn
    networking off (airplane mode, not just Wi-Fi), relaunch from the home
    screen, and complete a transfer. This is the only check that proves the

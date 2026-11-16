@@ -82,8 +82,6 @@ export const STATE_KEYS = [
   'switching',
   'camera',
   'zoom',
-  'torchOn',
-  'torchOff',
   'stale',
   'switchToNew',
   'passphraseLabel',

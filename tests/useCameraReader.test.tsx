@@ -32,9 +32,6 @@ function fakeController(overrides: Partial<CameraController> = {}): CameraContro
     zoomRange: vi.fn(() => null),
     setZoom: vi.fn(async () => undefined),
     applyConstraints: vi.fn(async () => undefined),
-    torchSupported: vi.fn(() => false),
-    torchOn: vi.fn(() => false),
-    setTorch: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -406,59 +403,7 @@ test('a reported DECODER_FAILED releases the controller so start rebuilds the de
   view.unmount();
 });
 
-test('exposes torch state and forwards setTorch', async () => {
-  let torch = false;
-  const controller = fakeController({
-    torchSupported: () => true,
-    torchOn: () => torch,
-    setTorch: vi.fn(async (on: boolean) => {
-      torch = on;
-    }),
-  });
-  vi.mocked(readQrStream).mockResolvedValue(controller);
-  const view = renderHarness();
-  await flush();
-
-  expect(view.result.torchSupported).toBe(true);
-  expect(view.result.torch).toBe(false);
-
-  await act(async () => {
-    await view.result.setTorch(true);
-  });
-
-  expect(controller.setTorch).toHaveBeenCalledWith(true);
-  expect(view.result.torch).toBe(true);
-  view.unmount();
-});
-
-test('a torch rejection sets the typed error and resolves', async () => {
-  const failure = new CameraError('TORCH_UNSUPPORTED', 'This camera does not support the torch.');
-  let report: ((error: QrStreamError) => void) | null = null;
-  const controller = fakeController({
-    setTorch: vi.fn(async () => {
-      report?.(failure);
-      throw failure;
-    }),
-  });
-  controller.onError = (callback) => {
-    report = callback;
-  };
-  vi.mocked(readQrStream).mockResolvedValue(controller);
-  const onError = vi.fn();
-  const view = renderHarness({ onError });
-  await flush();
-
-  await act(async () => {
-    await expect(view.result.setTorch(true)).resolves.toBeUndefined();
-  });
-
-  expect(view.result.error).toBe(failure);
-  expect(view.result.error?.code).toBe('TORCH_UNSUPPORTED');
-  expect(onError).toHaveBeenCalledTimes(1);
-  view.unmount();
-});
-
-test('sync exposes zoom, diagnostics, and torch reported by the controller', async () => {
+test('sync exposes zoom and diagnostics reported by the controller', async () => {
   const controller = fakeController({
     devices: () => [device],
     activeId: () => 'cam-1',
@@ -469,11 +414,9 @@ test('sync exposes zoom, diagnostics, and torch reported by the controller', asy
         deviceId: 'cam-1',
         label: 'Back camera',
         settings: { width: 640, height: 480 },
-        capabilities: { torch: true },
+        capabilities: {},
       },
     }),
-    torchSupported: () => true,
-    torchOn: () => true,
   });
   vi.mocked(readQrStream).mockResolvedValue(controller);
   const view = renderHarness();
@@ -482,8 +425,6 @@ test('sync exposes zoom, diagnostics, and torch reported by the controller', asy
   expect(view.result.zoom).toEqual({ min: 1, max: 4, step: 0.5 });
   expect(view.result.zoomValue).toBe(1);
   expect(view.result.diagnostics?.active?.label).toBe('Back camera');
-  expect(view.result.torchSupported).toBe(true);
-  expect(view.result.torch).toBe(true);
   view.unmount();
 });
 

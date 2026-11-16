@@ -123,7 +123,6 @@ describe('cause preservation', () => {
 
   test('camera recoveries follow the code', () => {
     expect(new CameraError('CAMERA_NOT_FOUND', 'no camera').recovery).toBe('change-camera');
-    expect(new CameraError('TORCH_UNSUPPORTED', 'no torch').recovery).toBe('none');
     expect(new CameraError('DECODER_FAILED', 'decoder died').recovery).toBe('retry');
   });
 });

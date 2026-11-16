@@ -224,42 +224,6 @@ describe('camera constraints', () => {
   });
 });
 
-describe('camera torch', () => {
-  test('setTorch applies the advanced constraint when supported', async () => {
-    const track = fakeTrack('cam-1', () => undefined, { capabilities: { torch: true } });
-    const { video } = stubCamera({ media: async () => fakeStream(track) });
-    const controller = await readQrStream({ video, decode: silentDecoder });
-
-    expect(controller.torchSupported()).toBe(true);
-    expect(controller.torchOn()).toBe(false);
-
-    await controller.setTorch(true);
-    expect(track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] });
-    expect(controller.torchOn()).toBe(true);
-
-    await controller.setTorch(false);
-    expect(controller.torchOn()).toBe(false);
-    controller.stop();
-  });
-
-  test('setTorch rejects TORCH_UNSUPPORTED when the track has no torch', async () => {
-    const { video } = stubCamera();
-    const controller = await readQrStream({ video, decode: silentDecoder });
-    const errors: QrStreamError[] = [];
-    controller.onError((error) => errors.push(error));
-
-    await expect(controller.setTorch(true)).rejects.toMatchObject({
-      name: 'CameraError',
-      code: 'TORCH_UNSUPPORTED',
-      recovery: 'none',
-    });
-
-    expect(errors.map((error) => error.code)).toEqual(['TORCH_UNSUPPORTED']);
-    expect(controller.torchOn()).toBe(false);
-    controller.stop();
-  });
-});
-
 describe('camera errors', () => {
   test('permission failure rejects a coded CameraError with cause', async () => {
     const denied = new DOMException('denied', 'NotAllowedError');
