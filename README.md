@@ -550,8 +550,10 @@ consumers should use `"moduleResolution": "bundler"` (the default for Vite,
 Next, and modern webpack). A Node16/NodeNext consumer will need to point at the
 sources or add the extensions itself.
 
-All five entry points are verified by installing the package into an empty
-project and importing it, not just by running the tests.
+All five entry points are verified against the packed tarball by `publint` and
+`attw`, and a release smoke test installs the package into an empty project and
+imports the root entry. The install smoke does not import each subpath; the
+subpath exports are checked statically against the tarball.
 
 ## Limits
 

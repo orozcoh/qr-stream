@@ -21,25 +21,39 @@ its compatibility row are in the [README](../README.md#version-compatibility).
 
 ## Errors: one typed surface
 
-0.2 exposed `error` *and* `errorInfo`, and some domain failures arrived as
-`RangeError`. 1.0 exposes exactly one value:
+0.2 reported failures as plain values, and the three hooks did not agree:
+
+| 0.2 hook | `error` type |
+| --- | --- |
+| `useQrStreamReader` | `string \| null` |
+| `useCameraReader` | `string \| null` |
+| `useQrStreamWriter` | `Error \| null` |
+
+1.0 exposes exactly one value on every hook:
 
 ```ts
 error: QrStreamError | null
 ```
 
-Delete every `errorInfo` read. Branch on `error.code` and `error.recovery`, not on
-the message (messages are human-readable and non-contractual):
+Render `error.message`, and branch on `error.code` and `error.recovery` (messages
+are human-readable and non-contractual). The old string comparisons against
+English text have to go:
 
 ```tsx
 // 0.2
-if (errorInfo) show(errorInfo.message, errorInfo.details);
+if (error === 'That passphrase does not match. Try again — no need to rescan.') {
+  showUnlock();
+}
+if (error) return <p>{error}</p>;
 
 // 1.0
-if (error) {
-  show(error.code, error.recovery, error.details);
-}
+if (error?.code === 'WRONG_PASSPHRASE') showUnlock();
+if (error) return <p>{error.message}</p>;
 ```
+
+The writer hook's `Error | null` becomes `QrStreamError | null`; `error.message`
+still displays, but `error.code` now tells `WIRE_TOO_LARGE` apart from an
+unrelated failure.
 
 `isQrStreamError(value)` narrows an unknown caught value. The subclasses are
 `PayloadTooLargeError`, `WrongKeyError`, `CameraError`, `DecoderError`, and
@@ -57,8 +71,9 @@ try {
 }
 ```
 
-A domain error is no longer guaranteed to be a `RangeError` (or any built-in).
-Replace `instanceof RangeError` with `isQrStreamError(cause)` plus a code check.
+Some 0.2 core failures were `RangeError` (QR capacity, the decompression cap,
+and metadata/varint parsing). 1.0 maps those to typed codes. Replace
+`instanceof RangeError` with `isQrStreamError(cause)` plus a code check.
 
 ## Limits: 8 MiB raw, 1 MiB wire, 8 MiB decoded
 
@@ -148,12 +163,21 @@ const { videoRef, start, stop, error, starting } = useCameraReader({
 - `error` is a `QrStreamError | null`. A failed `start()` **records** the error;
   the promise resolves, so `try { await start() } catch` sees nothing.
 
-The old two-argument camera callback is gone. `readQrStream`'s `onError` receives
-one typed error:
+The camera callback changed argument type, not arity. 0.2 was
+`onError(callback: (error: string) => void)`; 1.0 is
+`onError(callback: (error: QrStreamError) => void)`. It is still a one-argument
+handler; only the parameter type changes:
 
 ```ts
-controller.onError((error) => show(error.code, error.recovery));
+// 0.2
+controller.onError((message: string) => show(message));
+
+// 1.0
+controller.onError((error: QrStreamError) => show(error.code, error.recovery));
 ```
+
+An unannotated parameter (`(error) => show(error)`) keeps compiling, but it now
+receives an object. Read `error.message` to display text.
 
 Camera mutations (`select`, `cycle`, `rescan`, `setZoom`, `applyConstraints`,
 `setTorch`) reject with `CameraError`; the React hook catches them and surfaces
@@ -234,9 +258,11 @@ the asset to your own origin through your bundler, precache it, and allow
 
 ## `WrongKeyError` moved
 
-`WrongKeyError` is exported from `@orozcoh/qr-stream` and
-`@orozcoh/qr-stream/react`. It is no longer re-exported from the internal
-`crypto` module; import it from a public entry.
+`WrongKeyError` is still exported from `@orozcoh/qr-stream` and
+`@orozcoh/qr-stream/react`; its source moved from `src/core/crypto.ts` to
+`src/core/errors.ts`. If you imported it from the package root or `/react`,
+nothing changes. If you reached into the old internal module
+(`.../dist/core/crypto`), move the import to a public entry.
 
 It still means "AES-GCM authentication failed": a wrong passphrase or a damaged
 payload. The reader keeps the assembled ciphertext, so a retry costs a retype,
@@ -258,19 +284,29 @@ In React, `useQrStreamReader` exposes `wrongKey` and `retryKey(next)`.
 ## Migration checklist
 
 ```bash
-# Every hit is a call site to update.
-rg "errorInfo|instanceof RangeError|renderQrStream\(\{ packets|createZXingDecoder\(\{|from '.*crypto'" src
+# A hit is a deep import of the old internal module; public imports from the
+# package root or /react need no change.
+rg "from ['\"].*/crypto(\.js)?['\"]" src
+
+# Review these call sites: the low-level packet form still exists, but writer
+# mode is the 1.0 sender; the decoder now requires wasmUrl; RangeError checks
+# no longer catch domain errors.
+rg "renderQrStream\(\{ packets|createZXingDecoder\(\{|instanceof RangeError" src
 ```
 
-- [ ] Remove `errorInfo`; read the typed `error`.
-- [ ] Replace built-in error checks with `isQrStreamError` plus `error.code`.
+- [ ] Change every hook `error` from `string`/`Error` to `QrStreamError`; render
+      `error.message` and branch on `error.code`/`error.recovery`.
+- [ ] Update camera `onError` handlers from `(error: string)` to
+      `(error: QrStreamError)`.
+- [ ] Replace `instanceof RangeError` with `isQrStreamError` plus a code check.
 - [ ] Decide whether to keep 8 MiB raw input or opt down with
       `limits: { maxInputBytes: 1024 * 1024 }`.
 - [ ] Replace hardcoded packet/version senders with `renderQrStream({ writer })`.
-- [ ] Move camera lifecycle to `enabled`/`start()`/`stop()` and read the typed
-      error instead of matching messages.
+- [ ] Adopt `enabled`/`start()`/`stop()` where the host needs manual camera
+      control, and read the typed error instead of matching messages.
 - [ ] Add `strings`/`formatError` if the host had forked the UI to translate it.
 - [ ] Pass `wasmUrl` and precache the `.wasm` asset.
-- [ ] Import `WrongKeyError` from the package root or `/react`.
+- [ ] Replace any deep `.../crypto` `WrongKeyError` import with the package root
+      or `/react`.
 - [ ] Re-run the two-device checks in the
       [integration guide](integration.md#8-testing-on-two-devices).
