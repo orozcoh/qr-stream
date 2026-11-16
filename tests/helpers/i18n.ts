@@ -3,8 +3,6 @@ import { DEFAULT_QR_STREAM_STRINGS, type QrStreamStrings } from '../../src/react
 
 const KEYS = Object.keys(DEFAULT_QR_STREAM_STRINGS) as (keyof QrStreamStrings)[];
 
-export const STRING_KEYS = KEYS;
-
 /**
  * A value that contains none of the default copy.
  *
@@ -27,7 +25,7 @@ export function sentinelStrings(): QrStreamStrings {
  * `fps · `, `to receive`) are what a hardcoded, interpolated default would
  * actually put on screen. A string without placeholders is compared whole.
  */
-export function defaultFragments(key: keyof QrStreamStrings): readonly string[] {
+function defaultFragments(key: keyof QrStreamStrings): readonly string[] {
   const template = DEFAULT_QR_STREAM_STRINGS[key];
   if (!template.includes('{')) return [template];
 
