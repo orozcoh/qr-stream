@@ -7,8 +7,11 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  exports?: Record<string, unknown>;
+  files?: string[];
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  scripts?: Record<string, string>;
 };
 
 describe('package metadata', () => {
@@ -34,6 +37,25 @@ describe('package metadata', () => {
       if (text.includes('zxing-wasm')) offenders.push(entry.name);
     }
     expect(offenders).toEqual([]);
+  });
+
+  test('the React peer range includes 18', () => {
+    expect(pkg.peerDependencies?.react).toMatch(/>=\s*18/);
+  });
+
+  test('package.json is exported for tooling', () => {
+    expect(pkg.exports?.['./package.json']).toBe('./package.json');
+  });
+
+  test('the React 18 typecheck script exists', () => {
+    expect(pkg.scripts?.['typecheck:react18']).toBeTruthy();
+  });
+
+  test('the published files are the built output only', () => {
+    // `files` is the pack allowlist: shipping `src/` or `tests/` would leak
+    // sources and double the tarball.
+    expect(pkg.files).toEqual(['dist']);
+    expect(pkg.files?.some((entry) => /^(src|tests|demo)\b/.test(entry))).toBe(false);
   });
 
   test('the core never depends on the QR encoder', () => {

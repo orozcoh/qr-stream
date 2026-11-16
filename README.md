@@ -62,6 +62,11 @@ installed for you, so a project that only encodes ships neither.
 
 ## Version compatibility
 
+| Version | React peer | Wire compatibility |
+| --- | --- | --- |
+| `0.3.0` | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
+| `0.2.0` | `>=19` | Reads `0.3.0` plaintext ≤1 MiB; encrypted streams are not readable by `0.1.x`. |
+
 `0.3.0` keeps the same wire format and moves the payload budgets to the
 raw/wire/decoded split described in [Limits](#limits). A `0.3.0` stream is
 readable by a `0.2.0` receiver for plaintext up to 1 MiB; set

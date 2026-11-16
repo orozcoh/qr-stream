@@ -9,5 +9,6 @@
     "src/browser/decoders/zxing.ts",
     "scripts/release.mjs"
   ],
-  "ignoreDependencies": ["@types/emscripten", "zxing-wasm"]
+  "ignoreDependencies": ["@types/emscripten", "zxing-wasm"],
+  "ignoreExportsUsedInFile": true
 }
