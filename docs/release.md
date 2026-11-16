@@ -153,6 +153,13 @@ One-time setup:
   environment **`npm-release`**. The workflow targets the same GitHub
   environment; a mismatch fails the OIDC exchange. Keep `production` for the
   Cloudflare demo deploy; it is not the npm publish gate.
+- Leave **Allowed actions** at `npm stage publish` and keep `npm publish`
+  unchecked. Entries created after September 3, 2026 default to stage-only; the
+  workflow stages, and a maintainer approves with 2FA. Enabling `npm publish`
+  would let CI bypass that gate, and a direct `npm publish` from a stage-only
+  entry fails with `403 ... OIDC permission denied for this action`. Provenance
+  may already be in the Sigstore log when that happens: the cause is the
+  connection's permissions or a field mismatch, not the OIDC token itself.
 - Leave the workflow's `permissions` alone: `contents: read` plus
   `id-token: write`. The OIDC identity is what Sigstore uses to attest the
   tarball.
@@ -162,10 +169,11 @@ One-time setup:
   `registry-url` is set; with no token that entry sends an empty credential and
   npm fails `E401` before it ever attempts the OIDC exchange. Trusted publishing
   needs no `_authToken` line at all.
-- Trusted publishing requires **npm >= 11.5.1 (Node >= 22.14)**. The workflow
-  pins `node-version: 22`, whose bundled npm is older, so it runs
-  `npm install -g npm@latest` before the publish step. Without a current npm the
-  OIDC exchange is not attempted and the publish fails before any upload.
+- Trusted publishing requires **npm >= 11.5.1 (Node >= 22.14)**; staged
+  publishing requires **npm >= 11.15.0**. The workflow pins `node-version: 22`,
+  whose bundled npm is older, so it runs `npm install -g npm@latest` before the
+  publish step. Without a current npm the OIDC exchange is not attempted and the
+  publish fails before any upload.
 
 `dry_run` defaults to **true**, so the first dispatch packs and reports without
 uploading:
@@ -182,8 +190,14 @@ in order: frozen install, branch/version/changelog check, `pnpm lint`,
 `pnpm check:package`, then
 
 ```bash
-npm publish --provenance --access public --tag <dist_tag>
+npm stage publish --provenance --access public --tag <dist_tag>
 ```
+
+This uploads the tarball to npm's staging area. The version is not installable
+until a maintainer approves it under **Staged Packages** on npmjs.com or with
+`npm stage approve <stage-id>`. Approval requires 2FA; OIDC can stage but never
+approve. The `--tag` is fixed when the version is staged, so `next` survives
+approval and `latest` does not move.
 
 For the `1.0.0-rc.1` release candidate, use the `next` dist-tag:
 
@@ -196,7 +210,17 @@ gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
   -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=false
 ```
 
-After any publish, assert the dist-tags before treating the release as done:
+Approve the staged candidate before installing it:
+
+```bash
+npm stage list '@orozcoh/qr-stream'
+npm stage view <stage-id>
+npm stage approve <stage-id>    # prompts for 2FA
+```
+
+`npm stage` requires npm >= 11.15.0; upgrade locally (`npm install -g npm@latest`)
+or approve it on npmjs.com under **Staged Packages**. After approval, assert the
+dist-tags before treating the release as done:
 
 ```bash
 npm view @orozcoh/qr-stream dist-tags
@@ -216,12 +240,12 @@ npm view @orozcoh/qr-stream dist-tags
 
 It does **not** tag, push, or create a GitHub release. Tags and release notes
 stay with `scripts/release.mjs`, which knows how to check that `main` is clean
-and synced and refuses a tag that points elsewhere. After a successful CI
-publish, finish locally from the same commit:
+and synced and refuses a tag that points elsewhere. After the staged version is
+approved, finish locally from the same commit:
 
 ```bash
 pnpm release:check
-pnpm release:publish --resume   # skips npm (already published), tags, releases, smoke-tests
+pnpm release:publish --resume   # skips npm (approved and live), tags, releases, smoke-tests
 ```
 
 `--resume` is what makes this safe: the script sees the version on npm, skips
@@ -281,12 +305,13 @@ GitHub Actions, which additionally requires:
 - the public `repository` field in `package.json` to match the GitHub repository
   (case-sensitive).
 
-`publish.yml` satisfies all three and passes `--provenance` on every real
+`publish.yml` satisfies all three and passes `--provenance` on every real stage
 publish. A green dry run proves the pack, version, and tag arguments — not the
 signature and not the token; npm makes no registry request under `--dry-run`, so
-auth is first exercised on the real run. `scripts/release.mjs` adds the flag
-only when the same conditions are visible; locally none are, so it publishes
-unsigned and says so.
+auth is first exercised on the real run. The transparency-log entry is written
+during staging; the package's attestation becomes visible once the version is
+approved. `scripts/release.mjs` adds the flag only when the same conditions are
+visible; locally none are, so it publishes unsigned and says so.
 
 To check what a published version carries:
 
@@ -297,9 +322,12 @@ npm audit signatures                                   # in a consuming project
 
 A missing attestation is not a vulnerability; it means "published from a
 machine, not from a CI identity". Record that in the release notes if it
-matters to your consumers. If the `publish.yml` run itself fails at
-`npm publish`, the attestation was never created — the registry has no partial
-state to clean up, because npm uploads and attestation are one request.
+matters to your consumers. If the `publish.yml` run fails at
+`npm stage publish`, the registry still has no partial version to clean up: the
+tarball and its attestation are uploaded in one request. The OIDC exchange can
+succeed and write a Sigstore transparency-log entry before the registry rejects
+the request with `OIDC permission denied for this action`; that orphan log entry
+is harmless.
 
 ## 6. Tag and GitHub release
 
