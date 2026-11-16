@@ -99,3 +99,19 @@ jobs:
 
       - name: Check size
         run: pnpm check:size
+
+  # The protected branch requires a check literally named "verify". Matrix jobs
+  # produce "verify (22)" / "verify (24)", so this gate publishes the required
+  # context and fails if either matrix leg fails.
+  verify-gate:
+    name: verify
+    needs: [verify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verify leg
+        run: |
+          if [ "${{ needs.verify.result }}" != "success" ]; then
+            echo "verify matrix result: ${{ needs.verify.result }}"
+            exit 1
+          fi
