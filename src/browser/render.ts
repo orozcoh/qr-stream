@@ -1,4 +1,6 @@
-import { RenderError } from '../core/errors.js';
+import { QrStreamError, RenderError } from '../core/errors.js';
+import { PRESETS } from '../core/types.js';
+import type { QrStreamWriter } from '../core/writer.js';
 import { packetToMatrix } from '../qr/matrix.js';
 import { matrixToRGBA } from '../qr/raster.js';
 
@@ -43,13 +45,68 @@ export interface RenderController {
   framesPainted(): number;
 }
 
-export interface RenderOptions {
-  packets: AsyncIterable<Uint8Array>;
+export interface RenderBaseOptions {
   canvas: HTMLCanvasElement;
-  fps: number;
-  version: number;
+  /** Target frame rate. Writer mode defaults to the preset's rate. */
+  fps?: number;
   /** Display refresh rate used to quantise `fps`. Defaults to 60. */
   refreshHz?: number;
+}
+
+/**
+ * Bind the renderer to a writer so the QR version cannot drift.
+ *
+ * The writer is the single source of truth for the version it encoded into its
+ * packets; passing one alongside `packets` would let the two disagree.
+ */
+export interface RenderWriterOptions extends RenderBaseOptions {
+  writer: QrStreamWriter;
+  packets?: never;
+  version?: never;
+}
+
+/** Low-level form: paint an arbitrary packet stream at an explicit version. */
+export interface RenderPacketsOptions extends RenderBaseOptions {
+  packets: AsyncIterable<Uint8Array>;
+  version: number;
+  writer?: never;
+  fps: number;
+}
+
+export type RenderOptions = RenderWriterOptions | RenderPacketsOptions;
+
+interface ResolvedStream {
+  packets: AsyncIterable<Uint8Array>;
+  version: number;
+  fps: number;
+}
+
+/**
+ * Collapse the union into one shape.
+ *
+ * Exactly one mode must be present. A writer carries its own version and
+ * default rate, so a host cannot pair the wrong version with a writer's
+ * packets by accident.
+ */
+function resolveStream(options: RenderOptions): ResolvedStream {
+  const hasWriter = options.writer !== undefined;
+  const hasPackets = options.packets !== undefined;
+
+  if (hasWriter === hasPackets) {
+    throw new QrStreamError('INVALID_ARGUMENT', 'renderQrStream takes either a writer or raw packets, not both');
+  }
+
+  if (hasWriter) {
+    const { writer } = options as RenderWriterOptions;
+    return {
+      packets: writer.packets(),
+      version: writer.version,
+      fps: options.fps ?? PRESETS[writer.preset].fps,
+    };
+  }
+
+  const raw = options as RenderPacketsOptions;
+  return { packets: raw.packets, version: raw.version, fps: raw.fps };
 }
 
 /** Packets kept ready ahead of the paint loop. Enough to absorb jitter, not more. */
@@ -63,7 +120,8 @@ const QUEUE_CAP = 3;
  * what produces the moire that makes dense codes unreadable.
  */
 export function renderQrStream(options: RenderOptions): RenderController {
-  const { canvas, packets, version } = options;
+  const { packets, version, fps: requestedFps } = resolveStream(options);
+  const { canvas } = options;
   const refreshHz = options.refreshHz ?? 60;
   const context = canvas.getContext('2d');
   if (context === null) throw new RenderError('canvas 2d context unavailable');
@@ -72,7 +130,7 @@ export function renderQrStream(options: RenderOptions): RenderController {
   const sourceContext = source.getContext('2d');
   if (sourceContext === null) throw new RenderError('offscreen 2d context unavailable');
 
-  let fps = quantizeFps(options.fps, refreshHz);
+  let fps = quantizeFps(requestedFps, refreshHz);
   let painted = 0;
   let running = false;
   let frameHandle = 0;

@@ -30,6 +30,35 @@ const take = async <T>(gen: AsyncGenerator<T>, count: number): Promise<T[]> => {
 };
 
 describe('createQrStreamWriter', () => {
+  test('exposes the QR version and preset that produced the stream', async () => {
+    for (const preset of Object.keys(PRESETS) as (keyof typeof PRESETS)[]) {
+      const writer = await createQrStreamWriter(new Uint8Array(100), { filename: 'a.json', preset });
+      expect(writer.preset).toBe(preset);
+      expect(writer.version).toBe(PRESETS[preset].version);
+    }
+  });
+
+  test('exposes plain, wire, and payload sizes', async () => {
+    const writer = await createQrStreamWriter(new Uint8Array(400), { filename: 'a.json', preset: 'fast' });
+    expect(writer.plainBytes).toBe(400);
+    expect(writer.wireBytes).toBeGreaterThan(0);
+    expect(writer.payloadBytes).toBeGreaterThanOrEqual(writer.wireBytes);
+    expect(writer.encrypted).toBe(false);
+  });
+
+  test('wireBytes is the pre-encryption body and payloadBytes carries the tag', async () => {
+    const plain = await createQrStreamWriter(new Uint8Array(400), { filename: 'a.json', preset: 'fast' });
+    const sealed = await createQrStreamWriter(new Uint8Array(400), {
+      filename: 'a.json',
+      preset: 'fast',
+      passphrase: 'seven words here',
+    });
+    expect(sealed.encrypted).toBe(true);
+    expect(sealed.wireBytes).toBe(sealed.meta.wireLen);
+    expect(sealed.payloadBytes).toBeGreaterThan(sealed.wireBytes + 16);
+    expect(plain.wireBytes).toBe(plain.meta.wireLen);
+  });
+
   test('a small payload fits in one block', async () => {
     const writer = await createQrStreamWriter(new Uint8Array(300).fill(65), {
       filename: 'small.json',

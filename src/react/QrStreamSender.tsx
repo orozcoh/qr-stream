@@ -80,16 +80,15 @@ export function QrStreamSender({
     controllerRef.current?.stop();
 
     controllerRef.current = renderQrStream({
-      packets: writer.packets(),
+      writer,
       canvas: canvasRef.current,
       fps,
-      version: PRESETS[preset].version,
     });
     controllerRef.current.play();
     runningRef.current = true;
     setRunning(true);
     onRunningChangeRef.current?.(true);
-  }, [fps, preset, writer]);
+  }, [fps, writer]);
 
   useEffect(() => stop, [stop]);
 
