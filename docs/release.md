@@ -148,25 +148,24 @@ refuses a version that does not match both `package.json` and `CHANGELOG.md`.
 
 One-time setup:
 
-- Create a repository secret `NPM_TOKEN`: an npm automation token with publish
-  rights on `@orozcoh`. It authenticates the upload; it does not sign anything.
+- Configure npm **trusted publishing** for this repository on npmjs.com:
+  organization `orozcoh`, repository `qr-stream`, workflow `publish.yml`. If
+  the npm entry names an environment, add the same `environment:` to the job;
+  the current workflow leaves it out, so leave the npm environment blank or
+  update both together.
 - Leave the workflow's `permissions` alone: `contents: read` plus
-  `id-token: write`. The OIDC token, not the npm token, is what Sigstore uses to
-  attest the tarball.
-- If you would rather not store a token, configure npm trusted publishing for
-  this repository, then **also** remove two things: the `NODE_AUTH_TOKEN`
-  environment line from the publish step, and `registry-url:
-  https://registry.npmjs.org` from the `setup-node` step. `setup-node` writes
+  `id-token: write`. The OIDC identity is what Sigstore uses to attest the
+  tarball.
+- The workflow is **tokenless on purpose**: it has no `NODE_AUTH_TOKEN` and
+  `setup-node` has no `registry-url`. Do not add them back. `setup-node` writes
   `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into `.npmrc` whenever
   `registry-url` is set; with no token that entry sends an empty credential and
   npm fails `E401` before it ever attempts the OIDC exchange. Trusted publishing
-  needs no `_authToken` line at all. The `id-token: write` permission is
-  required either way.
+  needs no `_authToken` line at all.
 - Trusted publishing requires **npm >= 11.5.1 (Node >= 22.14)**. The workflow
-  pins `node-version: 22`, whose bundled npm is older than that, so add
-  `npm install -g npm@latest` before the publish step, or invoke
-  `npx npm@latest publish ...`. Without a current npm the OIDC exchange is not
-  attempted and the publish fails before any upload.
+  pins `node-version: 22`, whose bundled npm is older, so it runs
+  `npm install -g npm@latest` before the publish step. Without a current npm the
+  OIDC exchange is not attempted and the publish fails before any upload.
 
 `dry_run` defaults to **true**, so the first dispatch packs and reports without
 uploading:

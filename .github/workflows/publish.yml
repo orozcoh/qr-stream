@@ -54,10 +54,15 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      # Trusted publishing needs npm >= 11.5.1. Node 22's bundled npm is older;
+      # upgrading here also avoids an .npmrc _authToken entry from setup-node,
+      # which would pre-empt the OIDC exchange.
+      - name: Use an npm with trusted-publishing support
+        run: npm install -g npm@latest
 
       # Publish the commit that is actually on main, and only the version that
       # package.json and the changelog already describe. A mismatch is a
@@ -103,11 +108,10 @@ jobs:
       - name: Check package
         run: pnpm check:package
 
-      # Provenance comes from the job's OIDC token, not from the npm token: the
-      # token authenticates the publish, Sigstore signs the attestation.
+      # Provenance comes from the job's OIDC identity. No npm token is used:
+      # npm trusts this repository/workflow via trusted publishing.
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ inputs.dist_tag }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
