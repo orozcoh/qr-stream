@@ -6,8 +6,8 @@ tests, and a change that weakens one of those claims will be asked for proof.
 
 ## Setup
 
-Requirements: Node 20 or newer, [pnpm](https://pnpm.io) 11, and — for the
-browser tests — a local Chromium that Playwright can install.
+Requirements: Node 22.13 or newer (pnpm 11 requires it), [pnpm](https://pnpm.io)
+11, and — for the browser tests — a local Chromium that Playwright can install.
 
 ```bash
 pnpm install

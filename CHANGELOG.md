@@ -11,6 +11,10 @@ gaps may change before `1.0.0`.
 Field validation (two-device matrix + one-week pilot) is pending; no 1.0.0
 final claim.
 
+Tooling: development and CI require Node 22.13+ and pnpm 11 (pnpm 11 itself
+requires Node 22.13). The browser bundle is runtime-agnostic and the supported
+browser matrix is unchanged.
+
 ### 1.0 feature surface
 
 - React 18 support (`>=18` peer range) with a dedicated React 18 typecheck and

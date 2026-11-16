@@ -150,7 +150,7 @@
     "url": "https://github.com/orozcoh/qr-stream/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.13"
   },
   "publishConfig": {
     "access": "public"
