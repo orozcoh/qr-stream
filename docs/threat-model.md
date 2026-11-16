@@ -9,6 +9,9 @@ device.
 This page states what the library does and does not defend against, so a host
 can make an informed decision instead of assuming "offline" means "safe".
 
+The policy side — which versions are supported, how to report privately, and
+what to expect — is [SECURITY.md](../SECURITY.md).
+
 - [Trust boundaries](#trust-boundaries)
 - [Threats and controls](#threats-and-controls)
   - [Malicious QR payloads](#malicious-qr-payloads)
@@ -217,9 +220,13 @@ positive integer at or below the hard ceiling is rejected with
 
 ## Reporting
 
-Do not open a public issue for a suspected vulnerability. Use the repository's
-private security reporting channel; `SECURITY.md` (added with the 1.0 release
-infrastructure) is the authoritative contact and supported-version policy. A
-useful report includes the affected version, the exact `code`/`recovery` values,
-a minimal packet or stream if you can share one safely, and the browser/OS
-matrix where it reproduces.
+Do not open a public issue for a suspected vulnerability. Use GitHub's private
+vulnerability reporting channel for this repository:
+<https://github.com/orozcoh/qr-stream/security/advisories/new>. The supported
+versions, the reporting process, and the disclosure window are in
+[SECURITY.md](../SECURITY.md), which is the authoritative policy; this page is
+the threat analysis behind it.
+
+A useful report includes the affected version, the exact `code`/`recovery`
+values, a minimal packet or stream if you can share one safely, and the
+browser/OS matrix where it reproduces.

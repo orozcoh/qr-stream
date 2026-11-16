@@ -1,0 +1,48 @@
+name: scorecard
+
+on:
+  # Re-run when a branch-protection rule changes: that is the event that moves
+  # the Branch-Protection check.
+  branch_protection_rule:
+  schedule:
+    - cron: '41 5 * * 1'
+  push:
+    branches: [main]
+
+# Read-only by default; the analysis job elevates only what it needs.
+permissions: read-all
+
+jobs:
+  analysis:
+    name: scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write # upload the SARIF result
+      id-token: write # publish_results signs the attestation with OIDC
+      contents: read
+      actions: read # read workflow runs for the CI-Tests check
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publishes to the OpenSSF REST API and signs the result with the
+          # job's OIDC token, so the score is verifiable rather than asserted.
+          publish_results: true
+
+      # Keep the raw SARIF as a workflow artefact: the Security tab keeps
+      # alerts, not the report the score came from.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 5
+
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results.sarif

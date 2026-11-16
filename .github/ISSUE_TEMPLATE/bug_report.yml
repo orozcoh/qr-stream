@@ -1,0 +1,103 @@
+name: Bug report
+description: Report a reproducible defect in the library, a React component, or the demo PWA.
+title: 'bug: '
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Two things first:
+
+        - For a **security issue**, do not file here. Use
+          [private vulnerability reporting](https://github.com/orozcoh/qr-stream/security/advisories/new)
+          instead; see [SECURITY.md](https://github.com/orozcoh/qr-stream/blob/main/SECURITY.md).
+        - Offline `DECODER_FAILED`, camera selection, CSP, and limit errors usually
+          have a known fix in the [troubleshooting guide](https://github.com/orozcoh/qr-stream/blob/main/docs/troubleshooting.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: '`npm ls @orozcoh/qr-stream`, or the exact version in your lockfile.'
+      placeholder: 0.3.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: entry
+    attributes:
+      label: Entry point
+      description: Which import is involved? Select every one that applies.
+      multiple: true
+      options:
+        - '@orozcoh/qr-stream (core)'
+        - '@orozcoh/qr-stream/browser'
+        - '@orozcoh/qr-stream/qr'
+        - '@orozcoh/qr-stream/react'
+        - '@orozcoh/qr-stream/browser/zxing'
+        - Demo PWA
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and version, OS, device, and Node version if applicable.
+      placeholder: Chrome 141 / macOS 15 / Node 22.11
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest sequence that shows the problem. A short script or two files beat a screenshot.
+      placeholder: |
+        1. Create a writer with ...
+        2. Render with ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the exact error `code` and `recovery` if a QrStreamError was raised.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: error-code
+    attributes:
+      label: Error code and recovery
+      description: From `QrStreamError.code` / `QrStreamError.recovery`, if one was raised.
+      placeholder: DECODER_FAILED / retry
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output, stack trace, or capture details
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the troubleshooting guide.
+          required: true
+        - label: This is not a security vulnerability (those go through private reporting).
+          required: true
+        - label: I removed payloads, filenames, passphrases, and camera captures from the report.
+          required: true

@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/orozcoh/qr-stream/security/advisories/new
+    about: Private disclosure through GitHub Security Advisories. Never open a public issue for a vulnerability.
+  - name: Read the troubleshooting guide
+    url: https://github.com/orozcoh/qr-stream/blob/main/docs/troubleshooting.md
+    about: Offline WASM, camera, limit, passphrase, CSP, React, and canvas problems.
+  - name: Integration and offline checklist
+    url: https://github.com/orozcoh/qr-stream/blob/main/docs/integration.md
+    about: Host setup, PWA precaching, camera lifecycle, limits, errors, styling, and i18n.
+  - name: Support policy
+    url: https://github.com/orozcoh/qr-stream/blob/main/SUPPORT.md
+    about: Where to ask questions and what to expect. Best-effort, no SLA.

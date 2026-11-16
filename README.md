@@ -27,6 +27,10 @@ the reliability claims below are proven by tests rather than by hoping.
 - [Threat model](docs/threat-model.md)
 - [Performance](docs/performance.md)
 - [Wire format](docs/wire-format.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Release guide](docs/release.md)
 
 ## Why it works
 
@@ -525,6 +529,11 @@ pnpm release:prepare 0.3.0   # bump, changelog check, tests, PR, verify, merge
 pnpm release:publish         # tag, npm publish, GitHub release, smoke test
 ```
 
+The full procedure — the authoritative CI gate, provenance, the demo deploy,
+and rollback — is in [docs/release.md](docs/release.md). Local publishes are
+unsigned; `--provenance` is added only when npm can sign it from a CI OIDC
+identity.
+
 - `release:prepare` requires a `## <version>` section in `CHANGELOG.md`; it
   refuses to bump without one. You can write that section on `main` and leave
   it uncommitted: `prepare` includes it in the release commit, so the changelog
@@ -602,3 +611,19 @@ for the constants, the writer fields, and the 0.2 opt-down recipe.
   DoS, filename injection, WASM supply chain, and camera privacy.
 - [Performance](docs/performance.md) — benchmark numbers, budgets, and method.
 - [Wire format](docs/wire-format.md) — packet, metadata, fountain, and crypto.
+
+## Security and community
+
+- [Security policy](SECURITY.md) — supported versions, private vulnerability
+  reporting, the threat-model summary, and the no-telemetry, WASM/CDN, and
+  camera-privacy guidance.
+- [Contributing](CONTRIBUTING.md) — setup, layer rules, public-API and API
+  report discipline, the test expectations, and commit style.
+- [Support](SUPPORT.md) — where to ask a question, where to report a bug, and
+  what to expect (best-effort, no SLA).
+- [Release guide](docs/release.md) — preflight, changelog, the full gate,
+  publish, provenance, demo deploy, and rollback.
+- [Code of conduct](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1.
+
+Please do not open a public issue for a suspected vulnerability: use
+[GitHub private vulnerability reporting](https://github.com/orozcoh/qr-stream/security/advisories/new).
