@@ -166,6 +166,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     const myGeneration = openGeneration;
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null;
+    active = null;
     const next = await navigator.mediaDevices.getUserMedia(constraints);
     // stop() or a newer open() may have won while getUserMedia was pending.
     // Install nothing and release the tracks we just acquired.

@@ -1,5 +1,5 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
-import { DecoderError } from '../../core/errors.js';
+import { DecoderError, QrStreamError } from '../../core/errors.js';
 import type { FrameDecoder } from '../decoder.js';
 
 export interface ZXingDecoderOptions {
@@ -21,7 +21,10 @@ export interface ZXingDecoderOptions {
  * fields, CRC), so a text-only API cannot carry it.
  */
 export async function createZXingDecoder(options: ZXingDecoderOptions): Promise<FrameDecoder> {
-  const { wasmUrl } = options;
+  const wasmUrl = options?.wasmUrl;
+  if (typeof wasmUrl !== 'string' || wasmUrl.trim() === '') {
+    throw new QrStreamError('INVALID_ARGUMENT', 'wasmUrl is required', { recovery: 'none' });
+  }
 
   try {
     await prepareZXingModule({ overrides: { locateFile: () => wasmUrl } });

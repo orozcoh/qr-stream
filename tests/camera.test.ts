@@ -318,6 +318,7 @@ describe('camera errors', () => {
       cause: expect.any(DOMException),
     });
     expect(errors.map((error) => error.code)).toEqual(['CAMERA_IN_USE']);
+    expect(controller.activeId()).toBeNull();
     controller.stop();
   });
 
@@ -343,6 +344,7 @@ describe('camera errors', () => {
 
     expect(stopTrack).toHaveBeenCalled();
     expect(video.srcObject).toBeNull();
+    expect(controller.activeId()).toBeNull();
     expect(controller.diagnostics().active).toBeNull();
   });
 
