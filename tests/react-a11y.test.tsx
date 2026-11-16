@@ -3,9 +3,11 @@ import { act, createElement, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { CameraCapabilities } from '../src/browser/camera.js';
+import type * as RenderModule from '../src/browser/render.js';
 import { CameraError, QrStreamError, WrongKeyError } from '../src/core/errors.js';
 import { QrStreamReceiver } from '../src/react/QrStreamReceiver.js';
 import { QrStreamSender } from '../src/react/QrStreamSender.js';
+import { expectNoDefaultCopy, expectSentinels, sentinelStrings, sentinelValue } from './helpers/i18n';
 
 // The packaged components only reach the wrong-key, verified, torch, and error
 // states after an effect or a camera event. The hooks are stubbed so each state
@@ -55,6 +57,21 @@ const h = vi.hoisted(() => {
 vi.mock('../src/react/useQrStreamReader', () => ({ useQrStreamReader: () => h.reader }));
 vi.mock('../src/react/useCameraReader', () => ({ useCameraReader: () => h.camera }));
 vi.mock('../src/react/useQrStreamWriter', () => ({ useQrStreamWriter: () => h.writer }));
+// jsdom has no 2d context, and the running sender only needs the controller's
+// lifecycle to flip `running`.
+vi.mock('../src/browser/render.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof RenderModule>();
+  return {
+    ...actual,
+    renderQrStream: vi.fn(() => ({
+      play: (): void => undefined,
+      pause: (): void => undefined,
+      setFps: (): void => undefined,
+      stop: (): void => undefined,
+      framesPainted: (): number => 0,
+    })),
+  };
+});
 
 const stubDecoder = async () => ({ decode: async () => null });
 
@@ -240,4 +257,164 @@ test('a writer error is formatted and announced', async () => {
   const alerts = view.querySelectorAll('p[role="alert"]');
   expect(alerts).toHaveLength(1);
   expect(alerts[0]?.textContent).toBe('code:WIRE_TOO_LARGE');
+});
+
+// --- sentinel states -------------------------------------------------------
+// The SSR sentinel test can only see the default sender and receiver. These
+// tests drive every other state a key appears in, render it with the sentinel
+// copy, and assert the sentinel is on screen while no default English remains.
+
+const device = (id: string, label: string) => ({ deviceId: id, label, facing: 'environment', groupId: `grp-${id}` });
+
+async function clickButton(view: HTMLElement, label: string): Promise<void> {
+  const button = [...view.querySelectorAll('button')].find((node) => node.textContent === label);
+  expect(button, `missing button: ${label}`).toBeDefined();
+  await act(async () => {
+    button?.click();
+  });
+}
+
+test('the running sender renders sentinel speed, stop, and stop-to-change copy', async () => {
+  h.writer.writer = { k: 40 };
+  const strings = sentinelStrings();
+  const view = await render(createElement(QrStreamSender, { strings }));
+
+  await clickButton(view, sentinelValue('start'));
+
+  expectSentinels(view.innerHTML, ['speed', 'stop', 'stopToChange']);
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('the idle sender renders sentinel ready and preparing copy', async () => {
+  const strings = sentinelStrings();
+
+  h.writer.writer = { k: 40 };
+  const ready = await render(createElement(QrStreamSender, { strings }));
+  expectSentinels(ready.innerHTML, ['ready']);
+  expectNoDefaultCopy(ready.innerHTML);
+
+  h.writer.writer = null;
+  h.writer.pending = true;
+  const preparing = await render(createElement(QrStreamSender, { strings }));
+  expectSentinels(preparing.innerHTML, ['preparing']);
+  expectNoDefaultCopy(preparing.innerHTML);
+});
+
+async function pickFile(view: HTMLElement, file: { name: string; type: string; size: number }): Promise<void> {
+  const input = view.querySelector('input[type="file"]') as HTMLInputElement;
+  Object.defineProperty(input, 'files', {
+    value: [{ ...file, arrayBuffer: async () => new ArrayBuffer(0) }],
+    configurable: true,
+  });
+  await act(async () => {
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+test('a rejected file type renders the sentinel notice', async () => {
+  const strings = sentinelStrings();
+  const view = await render(createElement(QrStreamSender, { strings, accept: '.json' }));
+
+  await pickFile(view, { name: 'notes.txt', type: 'text/plain', size: 10 });
+
+  expectSentinels(view.innerHTML, ['fileTypeRejected']);
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('an oversized file renders the sentinel notice', async () => {
+  const strings = sentinelStrings();
+  const view = await render(createElement(QrStreamSender, { strings, maxBytes: 1024 }));
+
+  await pickFile(view, { name: 'big.bin', type: 'application/octet-stream', size: 4096 });
+
+  expectSentinels(view.innerHTML, ['fileTooLarge']);
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('the receiver renders sentinel camera, switch, zoom, and torch copy', async () => {
+  h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
+  h.camera.activeId = 'cam1';
+  h.camera.zoom = { min: 1, max: 4, step: 0.1 };
+  h.camera.zoomValue = 2;
+  h.camera.torchSupported = true;
+  h.camera.torch = true;
+  const strings = sentinelStrings();
+
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+  expectSentinels(view.innerHTML, ['camera', 'switchCamera', 'zoom', 'torchOn']);
+  expectNoDefaultCopy(view.innerHTML);
+
+  h.camera.torch = false;
+  h.camera.switching = true;
+  const switching = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+  expectSentinels(switching.innerHTML, ['switching', 'scanning', 'torchOff']);
+  expectNoDefaultCopy(switching.innerHTML);
+});
+
+test('a camera failure renders the sentinel placeholder', async () => {
+  h.camera.error = new CameraError('CAMERA_UNAVAILABLE', 'The camera could not be opened.');
+  const strings = sentinelStrings();
+
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+  expectSentinels(view.innerHTML, ['cameraUnavailable']);
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('stale frames render sentinel copy', async () => {
+  h.reader.stale = true;
+  const strings = sentinelStrings();
+
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+  expectSentinels(view.innerHTML, ['stale', 'switchToNew']);
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('the wrong-key panel renders sentinel copy and a sentinel placeholder', async () => {
+  h.reader.wrongKey = true;
+  h.reader.error = new WrongKeyError();
+  const strings = sentinelStrings();
+
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+  expectSentinels(view.innerHTML, ['wrongKey', 'passphraseLabel', 'passphraseInput', 'unlock']);
+  expect(view.querySelector('input[type="password"]')?.getAttribute('placeholder')).toBe(
+    sentinelValue('passphraseInput'),
+  );
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('a completed transfer renders sentinel verified and save copy', async () => {
+  h.reader.result = { data: new Uint8Array([1, 2, 3]), meta: { filename: 'report.json' } };
+  const strings = sentinelStrings();
+
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+  expectSentinels(view.innerHTML, ['verified', 'saveFile', 'receiveAnother']);
+  expectNoDefaultCopy(view.innerHTML);
+});
+
+test('the active camera line renders sentinel copy, including the unnamed fallback', async () => {
+  const diagnostics = (label: string) => ({
+    devices: [],
+    active: {
+      label,
+      settings: { width: 640, height: 480, frameRate: 30 },
+      capabilities: { focusMode: ['continuous'] },
+    },
+  });
+
+  h.camera.diagnostics = diagnostics('Back camera');
+  const active = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings: sentinelStrings() }));
+  expectSentinels(active.innerHTML, ['activeCamera']);
+  expectNoDefaultCopy(active.innerHTML);
+
+  // `unnamed` is only substituted into `activeCamera`, so give the template a
+  // placeholder for it.
+  h.camera.diagnostics = diagnostics('');
+  const unnamed = await render(
+    createElement(QrStreamReceiver, {
+      decoder: stubDecoder,
+      strings: { ...sentinelStrings(), activeCamera: '{label}' },
+    }),
+  );
+  expectSentinels(unnamed.innerHTML, ['unnamed']);
+  expectNoDefaultCopy(unnamed.innerHTML);
 });

@@ -14,20 +14,21 @@ import {
   resolveQrStreamStrings,
   type QrStreamStrings,
 } from '../src/react/strings';
+import {
+  coverageGaps,
+  expectNoDefaultCopy,
+  expectSentinels,
+  sentinelStrings,
+  sentinelValue,
+  SSR_RECEIVER_KEYS,
+  SSR_SENDER_KEYS,
+  STATE_KEYS,
+} from './helpers/i18n';
 
 const fakeFile = (name: string, type: string): File => ({ name, type, size: 10 }) as unknown as File;
 
 /** SSR never runs effects, so this factory is only here to satisfy the type. */
 const stubDecoder = async () => ({ decode: async () => null });
-
-/** A value that cannot be mistaken for any default copy. */
-const sentinel = (index: number): string => `⟦${index}⟧`;
-
-function sentinelStrings(): QrStreamStrings {
-  return Object.fromEntries(
-    Object.keys(DEFAULT_QR_STREAM_STRINGS).map((key, index) => [key, sentinel(index)]),
-  ) as unknown as QrStreamStrings;
-}
 
 describe('QrStreamSender', () => {
   test('renders the default title', () => {
@@ -229,18 +230,71 @@ describe('strings', () => {
     expect(formatQrString('{known} {missing}', { known: 'x' })).toBe('x {missing}');
   });
 
-  test('the speed template keeps its "Speed —" prefix', () => {
-    expect(formatQrString(DEFAULT_QR_STREAM_STRINGS.speed, { fps: 12, estimate: '~34 s' })).toBe(
-      'Speed — 12 fps · ~34 s to receive',
-    );
-  });
-
   test('treats an undefined override as absent', () => {
     expect(resolveQrStreamStrings({ start: undefined, stop: 'Detener' })).toMatchObject({
       start: 'Start stream',
       stop: 'Detener',
     });
   });
+
+  // The sentinel gate below cannot compare markup with a braced template: a
+  // component never renders braces. This table fixes the English a templated
+  // default actually produces, and the sentinel test asserts those literal
+  // chunks are gone when every key is overridden.
+  const TEMPLATE_CASES: readonly {
+    key: keyof QrStreamStrings;
+    values: Readonly<Record<string, string | number>>;
+    expected: string;
+  }[] = [
+    {
+      key: 'speed',
+      values: { fps: 12, estimate: '~34 s' },
+      expected: 'Speed — 12 fps · ~34 s to receive',
+    },
+    { key: 'accepts', values: { types: '.json, .csv' }, expected: '— .json, .csv' },
+    {
+      key: 'fileTypeRejected',
+      values: { name: 'notes.txt' },
+      expected: 'notes.txt is not an accepted file type here.',
+    },
+    { key: 'fileTooLarge', values: { kb: 4096, limit: 1024 }, expected: 'That file is 4096 KB. The limit is 1024 KB.' },
+    { key: 'densityOption', values: { name: 'fast', version: 20 }, expected: 'fast — v20' },
+    { key: 'zoom', values: { value: '2.0' }, expected: 'Zoom — 2.0×' },
+    { key: 'verified', values: { filename: 'a.json' }, expected: 'a.json — SHA-256 verified' },
+    {
+      key: 'progress',
+      values: { solved: 3, k: 10, percent: 30, rate: 12 },
+      expected: '3 / 10 blocks · 30% · 12 frames/s',
+    },
+    {
+      key: 'progressAria',
+      values: { solved: 3, k: 10, percent: 30 },
+      expected: '3 of 10 blocks, 30 percent',
+    },
+    {
+      key: 'diagnostics',
+      values: { count: 2 },
+      expected: 'Cameras reported by this browser (2)',
+    },
+    {
+      key: 'activeCamera',
+      values: { label: 'Back', width: 640, height: 480, fps: 30, focus: 'continuous' },
+      expected: 'Active: Back · 640×480 @ 30 fps · focus continuous',
+    },
+  ];
+
+  test('the template table covers every templated default', () => {
+    const templated = Object.keys(DEFAULT_QR_STREAM_STRINGS).filter((key) =>
+      (DEFAULT_QR_STREAM_STRINGS[key as keyof QrStreamStrings] as string).includes('{'),
+    );
+    expect(TEMPLATE_CASES.map(({ key }) => key).sort()).toEqual(templated.sort());
+  });
+
+  for (const { key, values, expected } of TEMPLATE_CASES) {
+    test(`the ${key} default renders "${expected}"`, () => {
+      expect(formatQrString(DEFAULT_QR_STREAM_STRINGS[key], values)).toBe(expected);
+    });
+  }
 
   test('every string key is wired into a packaged component', () => {
     const sources = ['../src/react/QrStreamSender.tsx', '../src/react/QrStreamReceiver.tsx']
@@ -251,15 +305,28 @@ describe('strings', () => {
     }
   });
 
-  test('a sentinel value for every key leaves no default English in either component', () => {
+  test('the sentinel gate covers every string key', () => {
+    expect(coverageGaps([...SSR_SENDER_KEYS, ...SSR_RECEIVER_KEYS, ...STATE_KEYS])).toEqual([]);
+  });
+
+  test('the default SSR sender renders only sentinel copy', () => {
     const strings = sentinelStrings();
     const sender = renderToStaticMarkup(createElement(QrStreamSender, { strings, accept: '.json' }));
+
+    expectNoDefaultCopy(sender);
+    expectSentinels(sender, SSR_SENDER_KEYS);
+  });
+
+  test('the default SSR receiver renders only sentinel copy', () => {
+    const strings = sentinelStrings();
     const receiver = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
 
-    for (const [key, value] of Object.entries(DEFAULT_QR_STREAM_STRINGS)) {
-      expect(sender, `sender still renders ${key}`).not.toContain(value);
-      expect(receiver, `receiver still renders ${key}`).not.toContain(value);
-    }
+    expectNoDefaultCopy(receiver);
+    expectSentinels(receiver, SSR_RECEIVER_KEYS);
+    // The diagnostics caption and the table headers are part of the same gate.
+    expect(receiver).toContain(`<caption class="qrs__sr-only">`);
+    expect(receiver).toContain(`<th>${sentinelValue('tableLabel')}</th>`);
+    expect(receiver).toContain('aria-valuetext');
   });
 });
 
