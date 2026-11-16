@@ -3,9 +3,13 @@
 ## 1.0.0-rc.1 — 2026-11-16
 
 **Release candidate; no new features after this point.** This is a pre-release:
-it is published under the `next` dist-tag and `latest` still resolves to `0.2.0`
-until the final `1.0.0` publish. The public API is frozen as documented in
-`etc/*.api.md`; only regressions and contract gaps may change before `1.0.0`.
+it **will be published** under the `next` dist-tag; publication is pending and
+`latest` still resolves to `0.2.0` until the final `1.0.0` publish. The public
+API is frozen as documented in `etc/*.api.md`; only regressions and contract
+gaps may change before `1.0.0`.
+
+Field validation (two-device matrix + one-week pilot) is pending; no 1.0.0
+final claim.
 
 ### 1.0 feature surface (from 0.3.0)
 
@@ -61,6 +65,9 @@ lands in this RC.
   [Migrating from 0.2 to 1.0](docs/migration-0.2-to-1.0.md).
 
 ## 0.3.0 — 2026-11-16
+
+**Never published.** This section is retained as the historical internal
+milestone; 0.3.0 never reached npm and `1.0.0-rc.1` supersedes it.
 
 ### Added
 

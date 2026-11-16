@@ -5,7 +5,7 @@ tag, the GitHub release, and the smoke test:
 
 ```bash
 pnpm release:check          # read-only preflight
-pnpm release:prepare 0.3.1  # bump, changelog, tests, PR, verify, merge
+pnpm release:prepare 1.0.1  # bump, changelog, tests, PR, verify, merge
 pnpm release:publish        # tag, npm publish, GitHub release, smoke test
 ```
 
@@ -40,6 +40,10 @@ breaking change, and the changelog must say so. The supported line is documented
 in [SECURITY.md](../SECURITY.md); a security patch goes out as a patch release on
 the current minor, not as a new minor.
 
+Pre-releases (`1.0.0-rc.1`) are published with `dist_tag=next` and must never
+move `latest`; the GitHub release is marked **pre-release**, not Latest. The
+final `1.0.0` publish is the first one that moves `latest`.
+
 The wire format is the compatibility boundary, not the package version. A change
 to packet, metadata, or fountain encoding needs a wire-version bump and an
 interop note in the changelog — the 0.2 fixture tests in `tests/fixtures/v0.2/`
@@ -68,7 +72,7 @@ unless you pass `--resume` (or `--update-release` for the notes).
 Choose the next version and write its changelog section **before** preparing:
 
 ```markdown
-## 0.3.1 — 2026-12-01
+## 1.0.1 — 2026-12-01
 
 ### Fixed
 
@@ -87,17 +91,17 @@ and security fixes explicitly.
 ## 3. Prepare
 
 ```bash
-pnpm release:prepare 0.3.1    # add --dry-run to print the plan only
+pnpm release:prepare 1.0.1    # add --dry-run to print the plan only
 ```
 
 The script then, in order:
 
 1. Verifies the version is greater than the current one and that the version,
    tag, and release are all absent.
-2. Creates `chore/release-0.3.1`, bumps `package.json`, and **runs the local
+2. Creates `chore/release-1.0.1`, bumps `package.json`, and **runs the local
    gate**: `pnpm typecheck`, `pnpm typecheck:core`, `pnpm test`, `pnpm build`,
    `pnpm demo:build`, `pnpm deploy:dry`.
-3. Commits `chore(release): prepare 0.3.1`, pushes the branch, and opens a pull
+3. Commits `chore(release): prepare 1.0.1`, pushes the branch, and opens a pull
    request whose body is the changelog section.
 4. Waits for `verify` on that PR (`gh pr checks --watch`), asks for confirmation,
    merges, returns to `main`, pulls, and deletes the branch.
@@ -169,7 +173,7 @@ uploading:
 
 ```bash
 gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
-  -f version=0.3.1 -f dist_tag=latest -f dry_run=true
+  -f version=1.0.1 -f dist_tag=latest -f dry_run=true
 gh run watch --repo orozcoh/qr-stream
 ```
 
@@ -180,6 +184,33 @@ in order: frozen install, branch/version/changelog check, `pnpm lint`,
 
 ```bash
 npm publish --provenance --access public --tag <dist_tag>
+```
+
+For the `1.0.0-rc.1` release candidate, use the `next` dist-tag:
+
+```bash
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=true
+gh run watch --repo orozcoh/qr-stream
+# green dry run, then the real upload:
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=false
+```
+
+After any publish, assert the dist-tags before treating the release as done:
+
+```bash
+npm view @orozcoh/qr-stream dist-tags
+# expect, for the RC:
+# next:   1.0.0-rc.1
+# latest: 0.2.0
+```
+
+If `latest` moved, put it back and re-check:
+
+```bash
+npm dist-tag add '@orozcoh/qr-stream@0.2.0' latest
+npm view @orozcoh/qr-stream dist-tags
 ```
 
 It does **not** tag, push, or create a GitHub release. Tags and release notes
@@ -196,6 +227,15 @@ pnpm release:publish --resume   # skips npm (already published), tags, releases,
 the upload, and still creates the annotated tag and the GitHub release. It still
 requires `npm whoami` to succeed, so `npm login` first even though nothing is
 uploaded.
+
+`scripts/release.mjs` creates an ordinary GitHub release, so mark an RC as a
+pre-release afterwards (or pass these flags to the equivalent `gh release
+create` when creating it by hand):
+
+```bash
+gh release edit v1.0.0-rc.1 --repo orozcoh/qr-stream --prerelease --latest=false
+gh release view v1.0.0-rc.1 --repo orozcoh/qr-stream   # "Pre-release", not "Latest"
+```
 
 ### 5b. Local publish — unsigned
 
@@ -250,7 +290,7 @@ unsigned and says so.
 To check what a published version carries:
 
 ```bash
-npm view @orozcoh/qr-stream@0.3.0 dist.attestations   # empty for a local publish
+npm view @orozcoh/qr-stream@1.0.0-rc.1 dist.attestations   # empty for a local publish
 npm audit signatures                                   # in a consuming project
 ```
 
@@ -268,15 +308,15 @@ nothing to do by hand. If a publish failed after the tag was pushed, finish it
 manually rather than re-tagging:
 
 ```bash
-git tag -l v0.3.1                     # must point at HEAD
-git rev-parse 'v0.3.1^{commit}'
-gh release view v0.3.1 --repo orozcoh/qr-stream
+git tag -l v1.0.1                     # must point at HEAD
+git rev-parse 'v1.0.1^{commit}'
+gh release view v1.0.1 --repo orozcoh/qr-stream
 ```
 
 Create a missing release from the changelog section:
 
 ```bash
-gh release create v0.3.1 --repo orozcoh/qr-stream --title 0.3.1 --notes-file notes.md
+gh release create v1.0.1 --repo orozcoh/qr-stream --title 1.0.1 --notes-file notes.md
 ```
 
 The release body is the `## <version>` section verbatim. Do not move an existing
@@ -309,14 +349,14 @@ tarball that has been installed by anyone should be treated as permanent.
 **Deprecate the bad version.** This is the first action and it is reversible:
 
 ```bash
-npm deprecate '@orozcoh/qr-stream@0.3.1' 'Broken reader teardown; use 0.3.2'
+npm deprecate '@orozcoh/qr-stream@1.0.1' 'Broken reader teardown; use 1.0.2'
 ```
 
 **Point `latest` back at the last good version.** Deprecation does not stop a
 fresh install of `@orozcoh/qr-stream` from resolving `latest`:
 
 ```bash
-npm dist-tag add '@orozcoh/qr-stream@0.3.0' latest
+npm dist-tag add '@orozcoh/qr-stream@0.2.0' latest
 npm view @orozcoh/qr-stream dist-tags
 ```
 
@@ -325,9 +365,9 @@ commit, wrong notes, accidental publish). Deleting them does not delete the
 tarball, and it breaks the link between an npm attestation and its ref:
 
 ```bash
-gh release delete v0.3.1 --repo orozcoh/qr-stream --yes
-git tag -d v0.3.1
-git push origin :refs/tags/v0.3.1
+gh release delete v1.0.1 --repo orozcoh/qr-stream --yes
+git tag -d v1.0.1
+git push origin :refs/tags/v1.0.1
 ```
 
 **Redeploy the previous site.** `deploy.yml` runs on pushes to `main`, so the
@@ -361,6 +401,9 @@ Do not reuse the rolled-back version number.
       explicitly recorded as an unsigned local publish.
 - [ ] `pnpm release:publish --resume` created the tag and GitHub release after a
       CI publish (it skips the already-uploaded npm step).
+- [ ] For a pre-release, `npm view @orozcoh/qr-stream dist-tags` shows
+      `next: <version>` and `latest` unchanged, and the GitHub release is marked
+      pre-release rather than Latest.
 - [ ] The demo deploy for the merge commit succeeded, including the header and
       asset-hash assertions.
 - [ ] The GitHub release body matches the changelog section.

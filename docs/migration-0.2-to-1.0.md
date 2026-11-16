@@ -4,8 +4,9 @@ The **wire format did not change**. A 1.0 build reads every legal 0.2 stream, an
 0.2 receiver can read a 1.0 stream when the plaintext is at most 1 MiB (or when
 the sender opts down with `limits: { maxInputBytes: 1024 * 1024 }`).
 
-**RC status:** this guide targets `1.0.0-rc.1`, which is published under the
-`next` dist-tag; `latest` stays on `0.2.0` until the final `1.0.0` publish.
+**RC status:** this guide targets `1.0.0-rc.1`, which will be published under
+the `next` dist-tag (publication pending); `latest` stays on `0.2.0` until the
+final `1.0.0` publish.
 
 The **API did change**. There are no aliases, deprecation shims, or dual error
 surfaces: 0.2 called the old names, 1.0 calls the new ones. This page is the

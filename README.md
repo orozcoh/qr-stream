@@ -158,14 +158,15 @@ decoder: it returns text, and a packet is binary. See [Decoders](#decoders).
 
 | Version | Status | React peer | Wire compatibility |
 | --- | --- | --- | --- |
-| `1.0.0-rc.1` | Pre-release (`next` dist-tag; not `latest`) | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
+| `1.0.0-rc.1` | Pre-release (publish pending to `next`; not `latest`) | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
 | `0.3.0` | Never published | `>=18` | Internal milestone with the same wire format; use `1.0.0-rc.1`. |
 | `0.2.0` | Registry `latest` until `1.0.0` ships | `>=19` | Reads 1.0 plaintext ≤1 MiB; encrypted streams are not readable by `0.1.x`. |
 
-`1.0.0-rc.1` is a release candidate, not the final release. It is published
-under the `next` dist-tag; `npm install @orozcoh/qr-stream` still resolves
-`latest` to `0.2.0` until `1.0.0` is published. The draft notes are the
-[`1.0.0-rc.1` changelog section](CHANGELOG.md#1000-rc1--2026-11-16), and the
+`1.0.0-rc.1` is a release candidate, not the final release. It **will be
+published** under the `next` dist-tag; publication is pending, and
+`npm install @orozcoh/qr-stream` still resolves `latest` to `0.2.0` until
+`1.0.0` is published. The draft notes are the
+[`1.0.0-rc.1` changelog section](CHANGELOG.md#100-rc1--2026-11-16), and the
 release procedure is in [docs/release.md](docs/release.md). `0.3.0` was an
 internal milestone and was never published.
 
@@ -533,7 +534,7 @@ Two phases, both behind an auth preflight (`gh` must be the repo owner and
 
 ```bash
 pnpm release:check   # read-only: auth, branch, sync, version, tag, npm, release
-pnpm release:prepare 0.3.0   # bump, changelog check, tests, PR, verify, merge
+pnpm release:prepare 1.0.0-rc.1   # bump, changelog check, tests, PR, verify, merge
 pnpm release:publish         # tag, npm publish, GitHub release, smoke test
 ```
 

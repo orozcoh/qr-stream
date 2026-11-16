@@ -19,7 +19,7 @@ body:
     attributes:
       label: Package version
       description: '`npm ls @orozcoh/qr-stream`, or the exact version in your lockfile.'
-      placeholder: 0.3.0
+      placeholder: 1.0.0-rc.1
     validations:
       required: true
 

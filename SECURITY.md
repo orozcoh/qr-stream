@@ -14,14 +14,15 @@ what is explicitly out of scope, lives in
 
 | Version | Supported | Notes |
 | --- | --- | --- |
-| `1.0.0-rc.1` | Pre-release, receives fixes | Published under the `next` dist-tag as a release candidate. `npm view @orozcoh/qr-stream version` still reports `0.2.0` for `latest` until the final `1.0.0` publish. |
+| `1.0.0-rc.1` | Pre-release, will receive fixes once published | Will be published under the `next` dist-tag as a release candidate; publication is pending. `npm view @orozcoh/qr-stream version` still reports `0.2.0` for `latest` until the final `1.0.0` publish. |
 | `0.2.x` | Yes, until `1.0.0` ships | The registry's current `latest`. Receives security fixes until `1.0.0` is published, then becomes unsupported. |
 | `0.3.0` | Never published | An internal milestone that never reached npm; use `1.0.0-rc.1` instead. |
 | `0.1.x` and older | No | Unsupported; upgrade to `0.2.x` today, or to `1.0.0-rc.1` for the release candidate. |
 
 Only the newest patch of a supported line receives fixes. **`1.0.0-rc.1` is a
-pre-release and `0.2.x` is still the registry's `latest`; both receive security
-fixes until the final `1.0.0` is published.** The wire format is unchanged
+pre-release that has not been published yet, and `0.2.x` is still the
+registry's `latest`; `0.2.x` receives security fixes now, and the RC will too
+once it is published, until the final `1.0.0`.** The wire format is unchanged
 between `0.2` and `1.0`, so upgrading is a package change rather than a protocol
 migration for plaintext payloads up to 1 MiB. See
 [Version compatibility](README.md#version-compatibility).
