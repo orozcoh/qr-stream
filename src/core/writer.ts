@@ -3,9 +3,10 @@ import { gzipIfSmaller } from './compress.js';
 import { DEFAULT_ITERATIONS, NONCE_BYTES, SALT_BYTES, encryptBytes } from './crypto.js';
 import { PayloadTooLargeError, QrStreamError, isQrStreamError } from './errors.js';
 import { encodeSymbol } from './fountain.js';
+import { GCM_TAG_BYTES, MAX_META_OVERHEAD, resolveTransferLimits } from './limits.js';
 import { encodeMeta, sanitizeFilename, writeVarint, type StreamMeta } from './meta.js';
 import { FLAG_ENCRYPTED, FLAG_GZIP, encodePacket } from './packet.js';
-import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS, type PresetName } from './types.js';
+import { FRAME_OVERHEAD, PRESETS, type PresetName, type TransferLimits } from './types.js';
 
 export interface WriterOptions {
   filename: string;
@@ -14,15 +15,27 @@ export interface WriterOptions {
   passphrase?: string;
   /** Override for tests; a random 32-bit id otherwise. */
   sessionId?: number;
+  /** Transfer budgets. Each value may only tighten the library default. */
+  limits?: TransferLimits;
 }
 
 export interface QrStreamWriter {
   sessionId: number;
+  preset: PresetName;
+  /** QR version of the preset. */
+  version: number;
   /** Source block count. */
   k: number;
   blockSize: number;
   flags: number;
   meta: StreamMeta;
+  /** Original input bytes. */
+  plainBytes: number;
+  /** Compressed body before encryption; equals `meta.wireLen`. */
+  wireBytes: number;
+  /** Entire reassembled payload: varint + metadata + wire body (and GCM tag). */
+  payloadBytes: number;
+  encrypted: boolean;
   /** Infinite stream of encoded packets, source symbols first. */
   packets(): AsyncGenerator<Uint8Array>;
 }
@@ -73,13 +86,26 @@ function randomSessionId(api: Crypto): number {
  * first would hand gzip incompressible bytes and lose the whole compression win.
  */
 export async function createQrStreamWriter(data: Uint8Array, options: WriterOptions): Promise<QrStreamWriter> {
-  if (data.length > MAX_INPUT_BYTES) {
-    throw new PayloadTooLargeError('input', data.length, MAX_INPUT_BYTES);
+  const limits = resolveTransferLimits(options.limits);
+
+  if (data.length > limits.maxInputBytes) {
+    throw new PayloadTooLargeError('input', data.length, limits.maxInputBytes);
+  }
+
+  // Compression is the gate that makes oversized raw input legal: only the
+  // wire body counts against the transfer budget.
+  const compressed = await gzipIfSmaller(data);
+  const wireBytes = compressed.data.length;
+
+  // Fail before hashing, metadata encoding, or PBKDF2. A 1 MiB+ payload was
+  // already expensive to compress; deriving a key before rejecting it would
+  // waste another half second for a transfer that cannot start.
+  if (wireBytes > limits.maxWireBytes) {
+    throw new PayloadTooLargeError('wire', wireBytes, limits.maxWireBytes);
   }
 
   const api = requireWebCrypto();
   const digest = await sha256(api, data);
-  const compressed = await gzipIfSmaller(data);
 
   // Normalise before deciding: a passphrase of spaces would otherwise enable
   // encryption with an empty key, showing a filled password field while anyone
@@ -118,12 +144,20 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
   }
 
   const metaLength = writeVarint(metaBytes.length);
-  const wireBytes = encrypted?.ciphertext ?? compressed.data;
+  const body = encrypted?.ciphertext ?? compressed.data;
 
-  const payload = new Uint8Array(metaLength.length + metaBytes.length + wireBytes.length);
+  const payload = new Uint8Array(metaLength.length + metaBytes.length + body.length);
   payload.set(metaLength, 0);
   payload.set(metaBytes, metaLength.length);
-  payload.set(wireBytes, metaLength.length + metaBytes.length);
+  payload.set(body, metaLength.length + metaBytes.length);
+
+  // Defensive: the wire check above bounds the body, so metadata only has to
+  // fit its fixed overhead. If this trips, the budget constants are wrong;
+  // never hand the sender a stream the reader will reject.
+  const payloadBudget = limits.maxWireBytes + MAX_META_OVERHEAD + (hasKey ? GCM_TAG_BYTES : 0);
+  if (payload.length > payloadBudget) {
+    throw new PayloadTooLargeError('wire', payload.length, payloadBudget);
+  }
 
   const blockSize = qrCapacity(PRESETS[options.preset].version) - FRAME_OVERHEAD;
   const k = Math.max(1, Math.ceil(payload.length / blockSize));
@@ -140,10 +174,16 @@ export async function createQrStreamWriter(data: Uint8Array, options: WriterOpti
 
   return {
     sessionId,
+    preset: options.preset,
+    version: PRESETS[options.preset].version,
     k,
     blockSize,
     flags,
     meta,
+    plainBytes: data.length,
+    wireBytes,
+    payloadBytes: payload.length,
+    encrypted: hasKey,
     async *packets() {
       for (let symbolIdx = 0; ; symbolIdx += 1) {
         yield encodePacket({

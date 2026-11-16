@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { QrStreamError, isQrStreamError } from '../core/errors.js';
-import type { PresetName } from '../core/types.js';
+import type { PresetName, TransferLimits } from '../core/types.js';
 import { createQrStreamWriter, type QrStreamWriter } from '../core/writer.js';
 
 export interface UseQrStreamWriterOptions {
@@ -8,6 +8,8 @@ export interface UseQrStreamWriterOptions {
   filename: string;
   preset: PresetName;
   passphrase?: string;
+  /** Transfer budgets. Each value may only tighten the library default. */
+  limits?: TransferLimits;
 }
 
 export interface UseQrStreamWriterResult {
@@ -25,14 +27,20 @@ interface WriterState {
 
 /** Builds a writer whenever the input or settings change; cancels in flight. */
 export function useQrStreamWriter(options: UseQrStreamWriterOptions): UseQrStreamWriterResult {
-  const { data, filename, preset, passphrase } = options;
+  const { data, filename, preset, passphrase, limits } = options;
+
+  // Limits are compared by their primitive values, not by object identity: an
+  // inline `limits={{ maxWireBytes: 4096 }}` on every render must not rebuild
+  // the writer (and restart a running stream) each time.
+  const maxWireBytes = limits?.maxWireBytes;
+  const maxInputBytes = limits?.maxInputBytes;
 
   // A fresh object whenever any input changes. Comparing this identity is the
   // only state that Start may trust: it is updated during render, whereas the
   // effect that builds the next writer runs after the render. Without it, the
   // passphrase-changed render still sees the previous cleartext writer.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the values are identity inputs, not memo inputs
-  const settingsKey = useMemo(() => ({}), [data, filename, preset, passphrase]);
+  const settingsKey = useMemo(() => ({}), [data, filename, preset, passphrase, maxWireBytes, maxInputBytes]);
   const [state, setState] = useState<WriterState | null>(null);
   const [error, setError] = useState<QrStreamError | null>(null);
 
@@ -48,6 +56,7 @@ export function useQrStreamWriter(options: UseQrStreamWriterOptions): UseQrStrea
       filename,
       preset,
       ...(passphrase ? { passphrase } : {}),
+      ...(limits ? { limits } : {}),
     })
       .then((created) => {
         if (!cancelled) setState({ key: settingsKey, writer: created });

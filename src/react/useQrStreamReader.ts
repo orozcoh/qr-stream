@@ -2,9 +2,15 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { QrStreamError, WrongKeyError, isQrStreamError } from '../core/errors.js';
 import type { StreamMeta } from '../core/meta.js';
 import { createQrStreamReader } from '../core/reader.js';
+import type { ReaderLimits } from '../core/types.js';
 
 export interface UseQrStreamReaderOptions {
   passphrase?: string;
+  /**
+   * Transfer budgets. Initial configuration: they are read when the reader is
+   * created, and changing them later does not rebuild an in-progress reader.
+   */
+  limits?: ReaderLimits;
 }
 
 export interface UseQrStreamReaderResult {
@@ -33,7 +39,9 @@ const STALE_PROMPT_THRESHOLD = 12;
  * displayed fps is a better signal than anything the receiver could infer.
  */
 export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQrStreamReaderResult {
-  const readerRef = useRef(createQrStreamReader());
+  // Limits are initial configuration, so the ref's initializer is the one
+  // place they are read. `reset()` keeps the same reader instance and budgets.
+  const readerRef = useRef(createQrStreamReader({ limits: options.limits }));
   const stampsRef = useRef<number[]>([]);
   const finishingRef = useRef(false);
   const failedHardRef = useRef(false);

@@ -157,4 +157,26 @@ describe('createQrStreamReader', () => {
     reader.reset();
     await expect(pending).resolves.toBeNull();
   });
+
+  test('the default reader accepts a payload above the legacy 1 MiB cap', async () => {
+    const record = { name: 'repeated row', values: [1, 2, 3] };
+    const size = JSON.stringify(record).length;
+    const payload = new TextEncoder().encode(
+      JSON.stringify({ rows: Array.from({ length: Math.ceil(1_100_000 / size) }, () => record) }),
+    );
+    expect(payload.length).toBeGreaterThan(1024 * 1024);
+
+    const writer = await createQrStreamWriter(payload, { filename: 'large.json', preset: 'fast' });
+    const reader = createQrStreamReader();
+    let emitted = 0;
+    for await (const packet of writer.packets()) {
+      reader.add(packet);
+      if (reader.progress().solved === writer.k) break;
+      emitted += 1;
+      if (emitted > writer.k * 20) break;
+    }
+
+    const result = await reader.result();
+    expect(result?.data.length).toBe(payload.length);
+  });
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { estimateTransferSeconds, quantizeFps, renderQrStream, type RenderController } from '../browser/render.js';
-import { MAX_INPUT_BYTES, PRESETS, type PresetName } from '../core/types.js';
+import { MAX_INPUT_BYTES, PRESETS, type PresetName, type TransferLimits } from '../core/types.js';
 import { describeAccept, matchesAccept } from './file-accept.js';
 import { ensureQrStreamStyles } from './styles.js';
 import { useQrStreamWriter } from './useQrStreamWriter.js';
@@ -17,6 +17,11 @@ export interface QrStreamSenderProps {
   accept?: string;
   /** Tighter size limit than the library's, in bytes. */
   maxBytes?: number;
+  /**
+   * Core transfer budgets. The file picker pre-checks against the input budget
+   * and `maxBytes`; the writer's wire-size check remains final.
+   */
+  limits?: TransferLimits;
   /** Called when the stream starts or stops, for embedding apps. */
   onRunningChange?(running: boolean): void;
   className?: string;
@@ -31,6 +36,7 @@ export function QrStreamSender({
   title = 'qr-stream',
   accept,
   maxBytes,
+  limits,
   onRunningChange,
   className,
 }: QrStreamSenderProps) {
@@ -58,6 +64,7 @@ export function QrStreamSender({
     filename,
     preset,
     ...(passphrase ? { passphrase } : {}),
+    ...(limits ? { limits } : {}),
   });
 
   const stop = useCallback(() => {

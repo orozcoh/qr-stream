@@ -1,5 +1,5 @@
 import { PayloadTooLargeError, QrStreamError } from './errors.js';
-import { MAX_INPUT_BYTES } from './types.js';
+import { MAX_DECODED_BYTES } from './types.js';
 
 function unsupportedRuntime(feature: string): QrStreamError {
   return new QrStreamError('UNSUPPORTED_RUNTIME', `${feature} is not available in this browser`, {
@@ -46,7 +46,7 @@ export async function gzipIfSmaller(bytes: Uint8Array): Promise<{ data: Uint8Arr
  * check runs. Cancelling the reader at the cap keeps peak allocation at
  * `maxBytes` plus one chunk.
  */
-export async function gunzip(bytes: Uint8Array, maxBytes = MAX_INPUT_BYTES): Promise<Uint8Array> {
+export async function gunzip(bytes: Uint8Array, maxBytes = MAX_DECODED_BYTES): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') throw unsupportedRuntime('DecompressionStream');
 
   let stream: ReadableStream<Uint8Array>;

@@ -3,7 +3,7 @@ import { QrStreamError } from '../src/core/errors';
 import { decodeMeta } from '../src/core/meta';
 import { readVarint } from '../src/core/meta';
 import { decodePacket } from '../src/core/packet';
-import { MAX_INPUT_BYTES, PRESETS } from '../src/core/types';
+import { MAX_INPUT_BYTES, MAX_WIRE_BYTES, PRESETS } from '../src/core/types';
 import { createQrStreamWriter } from '../src/core/writer';
 
 function lcg(seed: number): () => number {
@@ -38,6 +38,9 @@ describe('createQrStreamWriter', () => {
     expect(writer.k).toBe(1);
     expect(writer.meta.plainLen).toBe(300);
     expect(writer.meta.filename).toBe('small.json');
+    expect(writer.wireBytes).toBeLessThanOrEqual(MAX_WIRE_BYTES);
+    expect(writer.wireBytes).toBe(writer.meta.wireLen);
+    expect(writer.payloadBytes).toBeGreaterThan(writer.wireBytes);
   });
 
   test('blockSize is capacity minus framing for every preset', async () => {
@@ -90,7 +93,12 @@ describe('createQrStreamWriter', () => {
       preset: 'fast',
     });
     await expect(pending).rejects.toBeInstanceOf(QrStreamError);
-    await expect(pending).rejects.toMatchObject({ code: 'INPUT_TOO_LARGE', scope: 'input', recovery: 'change-input' });
+    await expect(pending).rejects.toMatchObject({
+      code: 'INPUT_TOO_LARGE',
+      scope: 'input',
+      limit: MAX_INPUT_BYTES,
+      recovery: 'change-input',
+    });
   });
 
   test('accepts exactly the cap', async () => {
