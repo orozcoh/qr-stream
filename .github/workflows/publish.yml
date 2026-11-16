@@ -21,7 +21,7 @@ on:
         default: latest
         type: string
       dry_run:
-        description: 'Pack and run npm publish --dry-run without uploading'
+        description: 'Pack and run npm stage publish --dry-run without uploading'
         required: false
         default: true
         type: boolean
@@ -59,9 +59,10 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Trusted publishing needs npm >= 11.5.1. Node 22's bundled npm is older;
-      # upgrading here also avoids an .npmrc _authToken entry from setup-node,
-      # which would pre-empt the OIDC exchange.
+      # Staged publishing needs npm >= 11.15.0 (trusted publishing alone needs
+      # 11.5.1). Node 22's bundled npm is older; upgrading here also avoids an
+      # .npmrc _authToken entry from setup-node, which would pre-empt the OIDC
+      # exchange.
       - name: Use an npm with trusted-publishing support
         run: npm install -g npm@latest
 
@@ -110,8 +111,10 @@ jobs:
         run: pnpm check:package
 
       # Provenance comes from the job's OIDC identity. No npm token is used:
-      # npm trusts this repository/workflow via trusted publishing.
-      - name: Publish to npm
+      # npm trusts this repository/workflow via trusted publishing. The trust
+      # relationship is stage-only on purpose, so this must stage rather than
+      # publish directly: `npm publish` fails with "OIDC permission denied".
+      - name: Stage on npm
         env:
           DIST_TAG: ${{ inputs.dist_tag }}
           DRY_RUN: ${{ inputs.dry_run }}
@@ -119,12 +122,12 @@ jobs:
           set -euo pipefail
           args=(--provenance --access public --tag "$DIST_TAG")
           if [ "$DRY_RUN" = "true" ]; then
-            echo "::notice::dry run — npm publish --dry-run ${args[*]}"
-            npm publish --dry-run "${args[@]}"
-            echo "Dry run: nothing was uploaded." >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::dry run — npm stage publish --dry-run ${args[*]}"
+            npm stage publish --dry-run "${args[@]}"
+            echo "Dry run: nothing was staged." >> "$GITHUB_STEP_SUMMARY"
           else
-            npm publish "${args[@]}"
-            echo "Published with provenance. Tag and GitHub release are next." >> "$GITHUB_STEP_SUMMARY"
+            npm stage publish "${args[@]}"
+            echo "Staged with provenance. Approve it on npm, then tag." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       # Tags and releases stay owned by scripts/release.mjs: it checks main is
@@ -134,12 +137,24 @@ jobs:
         if: ${{ !inputs.dry_run }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### Approve the staged version
+
+          Nothing is installable yet. Approve the staged version on npmjs.com
+          (**Staged Packages**) or locally with `npm stage approve <stage-id>`.
+          Both require 2FA; OIDC can stage but cannot approve.
+
+          Then confirm the tag:
+
+          ```bash
+          npm view @orozcoh/qr-stream dist-tags
+          ```
+
           ### Tag and GitHub release are not automated
 
-          Run this locally from `main` after the publish:
+          Run this locally from `main` after approval:
 
           ```bash
           pnpm release:check
-          pnpm release:publish --resume   # skips npm (already published), tags, releases, smoke-tests
+          pnpm release:publish --resume   # skips npm (approved and live), tags, releases, smoke-tests
           ```
           EOF
