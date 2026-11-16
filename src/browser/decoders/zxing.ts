@@ -4,10 +4,10 @@ import type { FrameDecoder } from '../decoder.js';
 
 export interface ZXingDecoderOptions {
   /**
-   * Location of `zxing_reader.wasm`. Without it the library falls back to a
-   * CDN, which works online and fails silently offline.
+   * Location of `zxing_reader.wasm`. Required: the library's implicit CDN
+   * fallback works online and fails silently offline.
    */
-  wasmUrl?: string;
+  wasmUrl: string;
 }
 
 /**
@@ -20,15 +20,13 @@ export interface ZXingDecoderOptions {
  * payload is not valid UTF-8. A packet is binary by construction (magic, u32
  * fields, CRC), so a text-only API cannot carry it.
  */
-export async function createZXingDecoder(options: ZXingDecoderOptions = {}): Promise<FrameDecoder> {
+export async function createZXingDecoder(options: ZXingDecoderOptions): Promise<FrameDecoder> {
   const { wasmUrl } = options;
 
-  if (wasmUrl) {
-    try {
-      await prepareZXingModule({ overrides: { locateFile: () => wasmUrl } });
-    } catch (cause) {
-      throw new DecoderError('the ZXing wasm module could not be prepared', { cause });
-    }
+  try {
+    await prepareZXingModule({ overrides: { locateFile: () => wasmUrl } });
+  } catch (cause) {
+    throw new DecoderError('the ZXing wasm module could not be prepared', { cause });
   }
 
   return {

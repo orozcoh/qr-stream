@@ -10,4 +10,11 @@ export {
   type RenderPacketsOptions,
   type RenderOptions,
 } from './browser/render.js';
-export { readQrStream, type CameraController, type CameraDevice, type ReadOptions } from './browser/camera.js';
+export {
+  readQrStream,
+  type CameraCapabilities,
+  type CameraController,
+  type CameraDevice,
+  type CameraDiagnostics,
+  type ReadOptions,
+} from './browser/camera.js';

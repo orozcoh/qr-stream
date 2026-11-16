@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { readQrStream, type CameraController, type CameraDevice, type CameraDiagnostics } from '../browser/camera.js';
 import type { FrameDecoder } from '../browser/decoder.js';
+import { isQrStreamError } from '../core/errors.js';
 
 export interface UseCameraReaderOptions {
   deviceId?: string;
@@ -29,6 +30,7 @@ export interface UseCameraReaderResult {
 
 /** Raw DOMException text is terse and leaks internals; say what to do instead. */
 function explainCameraFailure(cause: unknown): string {
+  if (isQrStreamError(cause)) return cause.message;
   if (cause instanceof DOMException) {
     if (cause.name === 'NotAllowedError') return 'Camera permission denied. Allow access, then reopen.';
     if (cause.name === 'NotFoundError') return 'No camera found on this device.';
@@ -89,7 +91,7 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
         }
         controllerRef.current = controller;
         controller.onSymbol((bytes) => symbolRef.current?.(bytes));
-        controller.onError((message) => setError(message));
+        controller.onError((error) => setError(error.message));
         sync();
         setReady(true);
       } catch (cause) {
@@ -116,8 +118,10 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
       setSwitching(true);
       try {
         await action();
-        sync();
+      } catch (cause) {
+        setError(explainCameraFailure(cause));
       } finally {
+        sync();
         setSwitching(false);
       }
     },
@@ -132,7 +136,11 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
 
   const setZoom = useCallback(async (value: number) => {
     setZoomValue(value);
-    await controllerRef.current?.setZoom(value);
+    try {
+      await controllerRef.current?.setZoom(value);
+    } catch (cause) {
+      setError(explainCameraFailure(cause));
+    }
   }, []);
 
   return {
