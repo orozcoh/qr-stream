@@ -5,6 +5,14 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const here = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
 
+/**
+ * The camera harness (`e2e.html`) is a test-only page: it renders the raw
+ * `useCameraReader` lifecycle controls that the shipped UI deliberately hides.
+ * It is built only when Playwright sets this flag, so production never serves
+ * a route that opens a camera for no user-facing purpose.
+ */
+const e2eHarness = process.env.QR_STREAM_E2E === '1';
+
 export default defineConfig({
   root: here('./'),
   plugins: [
@@ -41,5 +49,10 @@ export default defineConfig({
   build: {
     outDir: here('./dist'),
     emptyOutDir: true,
+    rollupOptions: {
+      // Keyed `index` so the emitted chunk stays `assets/index-*.js`; the
+      // production verification in .github/workflows/deploy.yml looks for it.
+      input: e2eHarness ? { index: here('./index.html'), e2e: here('./e2e.html') } : { index: here('./index.html') },
+    },
   },
 });

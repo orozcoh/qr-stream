@@ -65,6 +65,16 @@ jobs:
       - name: Build demo PWA
         run: pnpm demo:build
 
+      # Real-browser tests: one Chromium leg is enough; the two Node versions
+      # already cover the library itself through Vitest.
+      - name: Install Chromium
+        if: matrix.node == 22
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser end-to-end
+        if: matrix.node == 22
+        run: pnpm test:e2e
+
       - name: Check package
         run: pnpm check:package
 

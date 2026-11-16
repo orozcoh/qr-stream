@@ -8,6 +8,11 @@ coverage/
 *.log
 .wrangler/
 
+# Playwright artefacts
+test-results/
+playwright-report/
+blob-report/
+
 # local agent skill installs (tooling, not project source)
 .agents/
 .claude/

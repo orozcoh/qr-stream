@@ -41,10 +41,15 @@ export function App() {
   return (
     <main className="app">
       <div className="app__actions">
-        <button type="button" className="app__button app__button--primary" onClick={() => setPanel('send')}>
+        <button
+          type="button"
+          className="app__button app__button--primary"
+          data-testid="send"
+          onClick={() => setPanel('send')}
+        >
           Send
         </button>
-        <button type="button" className="app__button" onClick={() => setPanel('receive')}>
+        <button type="button" className="app__button" data-testid="receive" onClick={() => setPanel('receive')}>
           Receive
         </button>
       </div>

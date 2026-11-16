@@ -24,6 +24,6 @@
       "@orozcoh/qr-stream/browser/zxing": ["./src/browser/decoders/zxing.ts"]
     }
   },
-  "include": ["src", "tests", "demo"],
+  "include": ["src", "tests", "demo", "playwright.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
