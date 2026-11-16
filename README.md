@@ -12,6 +12,7 @@ the reliability claims below are proven by tests rather than by hoping.
 - [Library API](#library-api)
 - [React API](#react-api)
 - [Offline requirements](#offline-requirements)
+- [Integration guide](docs/integration.md)
 - [Wire format](docs/wire-format.md)
 
 ## Why it works
@@ -31,8 +32,9 @@ Consequences worth knowing:
   sender, because both people are standing next to each other.
 - Failing to finish is not a failure state — it means "keep pointing".
 
-Payload limits: JSON only, **1 MiB**. Typical JSON compresses 3–8×, so the
-common case transfers in a few seconds.
+Payload limits are split by what they bound: up to **8 MiB of raw input**,
+**1 MiB on the compressed wire**, and **8 MiB decoded** on the receiving side.
+Typical JSON compresses 3–8×, so the common case transfers in a few seconds.
 
 ## Install the demo
 
@@ -54,11 +56,18 @@ two devices are allowed to be offline.
 npm install @orozcoh/qr-stream
 ```
 
-The codec entry has no dependencies. The React entry needs React 19, and the
-decoder needs `zxing-wasm` (see [Decoders](#decoders)). Neither is installed for
-you, so a project that only encodes ships neither.
+The codec entry has no dependencies. The React entry needs React 18 or newer,
+and the decoder needs `zxing-wasm` (see [Decoders](#decoders)). Neither is
+installed for you, so a project that only encodes ships neither.
 
 ## Version compatibility
+
+`0.3.0` keeps the same wire format and moves the payload budgets to the
+raw/wire/decoded split described in [Limits](#limits). A `0.3.0` stream is
+readable by a `0.2.0` receiver for plaintext up to 1 MiB; set
+`limits: { maxInputBytes: 1024 * 1024 }` on the sender if every transfer must
+stay readable by an older device. See
+[Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility).
 
 `0.2.0` authenticates the metadata block of an encrypted transfer with AES-GCM
 additional authenticated data. A `0.2.0` receiver cannot decrypt a `0.1.x`
@@ -77,12 +86,12 @@ const writer = await createQrStreamWriter(bytes, {
   passphrase: 'optional',      // omit for a clear transfer
 });
 
-writer.k;          // number of source blocks
-writer.blockSize;  // bytes per frame
-
-for await (const packet of writer.packets()) {
-  // packet: Uint8Array — render it with packetToMatrix below
-}
+writer.k;            // number of source blocks
+writer.blockSize;    // bytes per frame
+writer.version;      // QR version the preset encoded into every packet
+writer.wireBytes;    // compressed body before encryption; equals meta.wireLen
+writer.payloadBytes; // varint + metadata + wire body (and GCM tag when encrypted)
+writer.packets();    // infinite async generator of packet bytes (low-level use)
 ```
 
 ```ts
@@ -106,6 +115,11 @@ Rendering and capture live behind their own entry points:
 import { packetToMatrix, matrixToRGBA, qrCapacity } from '@orozcoh/qr-stream/qr';
 import { renderQrStream, readQrStream, quantizeFps } from '@orozcoh/qr-stream/browser';
 import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
+
+const canvas = document.querySelector('canvas')!;
+const controller = renderQrStream({ writer, canvas });
+controller.play();
+// controller.stop() clears the last frame and releases the iterator
 ```
 
 ## React API
@@ -113,17 +127,31 @@ import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
 ```tsx
 import { QrStreamSender, QrStreamReceiver } from '@orozcoh/qr-stream/react';
 
+// The hook calls this factory each time it opens the camera; defining it once
+// keeps the option stable instead of allocating a new function per render.
+const createDecoder = () => createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' });
+
 <QrStreamSender
-  title="Share a file"        // heading, default "qr-stream"
-  accept=".json"              // optional; omitted accepts any file
-  maxBytes={512 * 1024}       // optional tighter cap
+  title="Share a file"                     // heading, default "qr-stream"
+  accept=".json"                           // optional; omitted accepts any file
+  maxBytes={512 * 1024}                    // optional tighter cap
+  limits={{ maxInputBytes: 1024 * 1024 }}  // optional tighter budget
+  strings={{ start: 'Start' }}             // any label is translatable
+  formatError={(error) => t(`error.${error.code}`)}
 />
 
 <QrStreamReceiver
-  decoder={() => createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' })}
+  decoder={createDecoder}
+  formatError={(error) => t(`error.${error.code}`)}
   onComplete={(data, filename) => save(data, filename)}
 />
 ```
+
+Every visible label comes from `strings` (`Partial<QrStreamStrings>`, defaults in
+`DEFAULT_QR_STREAM_STRINGS`) and uses `{placeholder}` templates, so one prop
+translates the whole component. `formatError` receives the typed error, so a
+host maps `error.code` to a translated sentence instead of matching on English
+messages.
 
 Both components are self-contained: they paint their own background, centre
 themselves, and carry no page-level assumptions, so dropping one into a modal
@@ -147,10 +175,19 @@ focus close enough to scan — that button is the fix.
 Hooks, when you want your own layout:
 
 ```ts
-useQrStreamWriter({ data, filename, preset, passphrase }) // { writer, error }
-useQrStreamReader({ passphrase })                        // { progress, solveRate, result, wrongKey, add, retryKey, reset }
-useCameraReader({ deviceId, onSymbol, createDecoder })   // { videoRef, devices, activeId, select, cycle, switching, error }
+useQrStreamWriter({ data, filename, preset, passphrase, limits }) // { writer, error, pending }
+useQrStreamReader({ passphrase, limits })                         // { progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset }
+useCameraReader({ deviceId, onSymbol, createDecoder, enabled })   // { videoRef, devices, start, stop, error, torch, ... }
 ```
+
+All three report failures as a typed `QrStreamError | null`; branch on
+`error.code` and `error.recovery` rather than matching a message. `enabled`
+defaults to `true` and closes the camera when it turns `false`, while manual
+`start()`/`stop()` let a host drive the lifecycle itself. `useCameraReader` also
+exposes `torchSupported`, `torch`, and `setTorch(on)`.
+
+`videoRef` is typed as `QrVideoRef`, a plain `{ current: HTMLVideoElement | null }`
+that is assignable to both React 18 and React 19 refs without a cast.
 
 ## Decoders
 
@@ -167,6 +204,10 @@ await readQrStream({ video, decode });
 (or only uses the sender) never installs it. `@orozcoh/qr-stream/browser` itself imports
 no QR library; only `@orozcoh/qr-stream/browser/zxing` does. If you forget to install the
 peer, the bundler fails at build time naming the package.
+
+`wasmUrl` is required, and there is no CDN fallback: the decoder loads from the
+asset you name or the transfer does not work. That is what makes the offline
+PWA honest — see the [integration guide](docs/integration.md#4-offline-pwa-checklist).
 
 `createZXingDecoder` is the only decoder provided. That is a deliberate
 decision, and the interface above is what keeps it a decision rather than a
@@ -195,14 +236,23 @@ capacity, which is not a trade worth making silently.
 
 ## Offline requirements
 
-Two things bite exactly once, in the room, when you cannot debug them:
+Three things bite exactly once, in the room, when you cannot debug them:
 
 1. **`getUserMedia` needs a secure context.** Load the app once over HTTPS (or
    `localhost`) and install it before you airgap the devices.
 2. **The WASM decoder must be precached.** `vite-plugin-pwa` will not include a
    `.wasm` that came from `node_modules` unless you add `**/*.wasm` to
-   `workbox.globPatterns`. `demo/vite.config.ts` does this; verify it by
-   searching the built `sw.js` for `zxing_reader`.
+   `workbox.globPatterns`, and the asset must fit
+   `workbox.maximumFileSizeToCacheInBytes`. `demo/vite.config.ts` does this;
+   verify it by searching the built `sw.js` for `zxing_reader`.
+3. **Copy the WASM to your own origin and pass `wasmUrl`.** Import
+   `zxing-wasm/reader/zxing_reader.wasm?url` and hand that URL to
+   `createZXingDecoder`. There is no CDN fallback, so the asset either loads
+   from your origin or the transfer fails offline. A strict CSP also needs
+   `script-src 'self' 'wasm-unsafe-eval'`.
+
+The full checklist, including the Workbox and CSP snippets, is in the
+[integration guide](docs/integration.md#4-offline-pwa-checklist).
 
 ## Presets
 
@@ -224,13 +274,13 @@ mid-switch as blur.
 ## Runtime requirements
 
 The core needs `CompressionStream` and `crypto.subtle`; Node 20+ or any
-current browser. The React entry needs React 19. The decoder needs
+current browser. The React entry needs React 18 or newer. The decoder needs
 `zxing-wasm`, installed separately.
 
 ## Testing
 
 ```bash
-pnpm test          # 153 tests, DOM-free
+pnpm test          # DOM-free suite
 pnpm typecheck
 pnpm build
 pnpm demo:build
@@ -351,10 +401,29 @@ project and importing it, not just by running the tests.
 
 - One file per transfer. No resume across a reload — a human restarts it.
 - No history, no chat, no two-way stream.
-- **1 MiB is minutes, not seconds.** At the `fast` preset an incompressible
-  megabyte is K = 1252 blocks, roughly 146 seconds of scanning at 1.75x
-  overhead. JSON compresses 3-8x, so a typical 1 MiB document finishes in
+- **Three budgets, not one.** Raw input may be up to **8 MiB**
+  (`MAX_INPUT_BYTES`), the compressed body before encryption up to **1 MiB**
+  (`MAX_WIRE_BYTES`), and the decoded result up to **8 MiB**
+  (`MAX_DECODED_BYTES`). Compression runs first, so a large JSON document can
+  fit the wire cap even when its raw size is several times larger.
+- **The writer reports the split.** `writer.plainBytes` is the original input,
+  `writer.wireBytes` the compressed body (`meta.wireLen`), and
+  `writer.payloadBytes` the full assembled payload including metadata and, when
+  encrypted, the GCM tag.
+- **Limits only tighten.** `limits.maxWireBytes` and `limits.maxInputBytes` on
+  the writer, and `limits.maxWireBytes` / `limits.maxDecodedBytes` on the
+  reader, may lower a default but never raise it. A limit that is not a positive
+  integer at or below the hard ceiling is rejected with `INVALID_ARGUMENT`.
+- **0.2 interop:** the wire format is unchanged. A 0.3 stream is readable by a
+  0.2 receiver for plaintext up to 1 MiB. For a mixed-version fleet, opt down
+  with `limits: { maxInputBytes: 1024 * 1024 }` on the sender.
+- **1 MiB on the wire is minutes, not seconds.** At the `fast` preset an
+  incompressible megabyte is K = 1252 blocks, roughly 146 seconds of scanning at
+  1.75x overhead. JSON compresses 3-8x, so a typical 1 MiB document finishes in
   15-30 seconds. The sender shows the estimate once the file is loaded.
 - Encryption protects against a bystander recording the screen. It does not
   protect against a weak passphrase: a spoken three-word phrase is crackable
   offline in about a day. Six words or a random passphrase.
+
+See [Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility)
+for the constants, the writer fields, and the 0.2 opt-down recipe.
