@@ -19,4 +19,9 @@ export { gzipIfSmaller, gunzip } from './core/compress.js';
 export { encryptBytes, decryptBytes, DEFAULT_ITERATIONS, type EncryptOptions } from './core/crypto.js';
 export { encodeMeta, decodeMeta, readVarint, writeVarint, type StreamMeta } from './core/meta.js';
 export { createQrStreamWriter, type WriterOptions, type QrStreamWriter } from './core/writer.js';
-export { createQrStreamReader, type QrStreamReader, type QrStreamReaderOptions, type AddResult } from './core/reader.js';
+export {
+  createQrStreamReader,
+  type QrStreamReader,
+  type QrStreamReaderOptions,
+  type AddResult,
+} from './core/reader.js';

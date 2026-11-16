@@ -1,11 +1,5 @@
 import { QrStreamError } from './errors.js';
-import {
-  MAX_DECODED_BYTES,
-  MAX_INPUT_BYTES,
-  MAX_WIRE_BYTES,
-  type ReaderLimits,
-  type TransferLimits,
-} from './types.js';
+import { MAX_DECODED_BYTES, MAX_INPUT_BYTES, MAX_WIRE_BYTES, type ReaderLimits, type TransferLimits } from './types.js';
 
 /** AES-GCM authentication tag appended to an encrypted wire body. */
 export const GCM_TAG_BYTES = 16;
@@ -31,11 +25,9 @@ export interface ResolvedReaderLimits {
 function resolveLimit(name: string, value: number | undefined, fallback: number, ceiling: number): number {
   if (value === undefined) return fallback;
   if (!Number.isInteger(value) || value < 1 || value > ceiling) {
-    throw new QrStreamError(
-      'INVALID_ARGUMENT',
-      `${name} must be a positive integer no greater than ${ceiling}`,
-      { details: { name, value, ceiling } },
-    );
+    throw new QrStreamError('INVALID_ARGUMENT', `${name} must be a positive integer no greater than ${ceiling}`, {
+      details: { name, value, ceiling },
+    });
   }
   return value;
 }
