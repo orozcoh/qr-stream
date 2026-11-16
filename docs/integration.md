@@ -194,12 +194,14 @@ function CameraStatus() {
 ```
 
 `isQrStreamError(value)` narrows an unknown caught value to the library's error
-type. A rejected `start()` also records the same object on `error`, so handle it
-once rather than once per path.
+type. A failed `start()` records the error on `error`; the hook resolves rather
+than rejecting, so `try { await start() } catch` never sees the failure. Handle
+the error state, not a rejection.
 
-The hook also exposes `torchSupported`, `torch`, and `setTorch(on)`.
-`setTorch` rejects with `TORCH_UNSUPPORTED` when the track has no torch
-capability; the component only renders the button when `torchSupported` is true.
+The hook also exposes `torchSupported`, `torch`, and `setTorch(on)`. The
+controller's `setTorch` rejects with `TORCH_UNSUPPORTED` when the track has no
+torch capability; the hook records it on `error` instead. The component only
+renders the button when `torchSupported` is true.
 
 ### React 18 and React 19
 
@@ -234,9 +236,11 @@ would put roughly 925 KB of WASM into every project that imports
 
 ## 4. Offline PWA checklist
 
-The failure this section prevents is silent: the app loads from cache, the
-camera opens, and every frame fails to decode because the WASM was never
-precached. Online it looks fine. In the airgap it never completes a transfer.
+The failure this section prevents is easy to misread. The app loads from cache,
+the decoder cannot load the WASM, and `start()` ends with a `DECODER_FAILED`
+error **before the camera opens** — not a live preview full of silent frame
+failures. Online the decoder fetches the asset and looks fine; in the airgap
+every transfer is blocked at the decoder.
 
 ### Secure context
 
@@ -527,8 +531,7 @@ Set a variable on any ancestor; it inherits into the component. Do not fight
 the canvas with a CSS width or height — the renderer sizes it to an integer
 module scale, and stretching it reintroduces fractional scaling.
 
-For a custom sender, pass `size` and `colors` to the renderer (or to
-`matrixToRGBA`):
+For a custom sender, pass `size` and `colors` to the renderer:
 
 ```ts
 renderQrStream({
@@ -540,6 +543,20 @@ renderQrStream({
     dark: [15, 23, 42, 255],
     light: [248, 250, 252, 255],
   },
+});
+```
+
+`size` belongs to `renderQrStream` only. The lower-level
+`matrixToRGBA(matrix, scale, options?)` takes an integer **pixels per module**
+for `scale`, not a target size, plus the same colour and quiet-zone options:
+
+```ts
+import { matrixToRGBA } from '@orozcoh/qr-stream/qr';
+
+const image = matrixToRGBA(matrix, 8, {
+  quietZone: 4,
+  dark: [15, 23, 42, 255],
+  light: [248, 250, 252, 255],
 });
 ```
 
