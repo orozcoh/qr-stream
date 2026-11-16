@@ -11,12 +11,14 @@ export const GCM_TAG_BYTES = 16;
  */
 export const MAX_META_OVERHEAD = 256;
 
-export interface ResolvedTransferLimits {
+/** Internal: the validated bounds a writer uses after `resolveTransferLimits`. */
+interface ResolvedTransferLimits {
   maxWireBytes: number;
   maxInputBytes: number;
 }
 
-export interface ResolvedReaderLimits {
+/** Internal: the validated bounds a reader uses after `resolveReaderLimits`. */
+interface ResolvedReaderLimits {
   maxWireBytes: number;
   maxDecodedBytes: number;
 }
