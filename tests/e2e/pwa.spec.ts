@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
 /**
+ * Known payload for the offline receive proof; must match `RECEIVE_TEXT` in
+ * `demo/e2e.tsx`. It is written out here on purpose: the spec knows the bytes
+ * before the page runs, so the assertion is not the harness grading itself.
+ */
+const EXPECTED = '{"offline":"receive","task":13}';
+
+/**
  * Offline behaviour of the built demo.
  *
  * This is the claim the whole package exists for: a phone that has loaded the
@@ -8,7 +15,7 @@ import { expect, test } from '@playwright/test';
  * (plus the test-only harness page), served by `vite preview`, and demands the
  * real service worker, the real precache, and a real network outage.
  */
-test('the service worker precaches the decoder and the app survives offline', async ({ context, page }) => {
+test('the service worker precaches the decoder and an offline receive completes', async ({ context, page }) => {
   await page.goto('/');
 
   // `ready` resolves as soon as an active worker exists, which can still be
@@ -57,15 +64,29 @@ test('the service worker precaches the decoder and the app survives offline', as
   expect(wasmResponse.ok, `cached wasm fetch failed with ${wasmResponse.status}`).toBe(true);
   expect(wasmResponse.byteLength).toBeGreaterThan(100_000);
 
-  // Strongest available proof without a QR video fixture: the shipped receiver
-  // instantiates ZXing from the precached wasm while offline and reaches a
-  // live camera stream. A wasm cache miss would fail the decoder and leave the
-  // preview with no frames.
-  await page.getByTestId('receive').click();
-  const video = page.locator('.qrs__video');
-  await expect(video).toBeVisible();
-  await expect
-    .poll(async () => video.evaluate((element) => (element as HTMLVideoElement).videoWidth), { timeout: 30_000 })
-    .toBeGreaterThan(0);
+  // A receive that actually completes offline. The harness serves a canvas
+  // painted with a known `k = 1` packet as the camera; the shipped receiver
+  // loads ZXing from the precache, decodes that frame, and the fountain reader
+  // reassembles and SHA-256-verifies the payload. Nothing here touches the
+  // network, so a wasm that instantiates but fails to decode would fail this.
+  await page.goto('/e2e.html#receive');
+  await expect(page.getByTestId('harness-mode')).toHaveText('receive');
+
+  await expect(page.getByTestId('received')).toHaveText(EXPECTED, { timeout: 30_000 });
+  await expect(page.getByTestId('received-filename')).toHaveText('offline.json');
+
+  // The receiver's own verified state, not a harness echo. `<output>` also has
+  // the implicit `status` role, so target the receiver's paragraph directly.
+  await expect(page.locator('p.qrs__meta[role="status"]')).toHaveText('offline.json — SHA-256 verified');
+  await expect(page.getByTestId('expected')).toHaveText(EXPECTED);
   await expect(page.locator('.qrs__error')).toHaveCount(0);
+
+  // Byte equality against the payload the spec knew before the page loaded.
+  const delivered = await page.evaluate(
+    () => (window as { __qrReceived?: { bytes: number[] } }).__qrReceived?.bytes ?? null,
+  );
+  expect(delivered).toEqual(Array.from(new TextEncoder().encode(EXPECTED)));
+
+  // The reader solved every source block, so progress reached k / k.
+  await expect(page.locator('.qrs__progress')).toHaveAttribute('aria-valuetext', '1 of 1 blocks, 100 percent');
 });
