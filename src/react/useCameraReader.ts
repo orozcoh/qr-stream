@@ -53,9 +53,6 @@ export interface UseCameraReaderResult {
   zoom: { min: number; max: number; step: number } | null;
   zoomValue: number;
   setZoom(value: number): Promise<void>;
-  torchSupported: boolean;
-  torch: boolean;
-  setTorch(on: boolean): Promise<void>;
 }
 
 /** Wrap a non-library failure in the code the UI can branch on. */
@@ -92,8 +89,6 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
   const [diagnostics, setDiagnostics] = useState<CameraDiagnostics | null>(null);
   const [zoom, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
   const [zoomValue, setZoomValue] = useState(0);
-  const [torchSupported, setTorchSupported] = useState(false);
-  const [torch, setTorchState] = useState(false);
   const [starting, setStarting] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState<QrStreamError | null>(null);
@@ -124,8 +119,6 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
     const range = controller.zoomRange();
     setZoomRange(range);
     setZoomValue(range ? range.min : 0);
-    setTorchSupported(controller.torchSupported());
-    setTorchState(controller.torchOn());
   }, []);
 
   const stop = useCallback((): void => {
@@ -146,8 +139,6 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
     setDiagnostics(null);
     setZoomRange(null);
     setZoomValue(0);
-    setTorchSupported(false);
-    setTorchState(false);
   }, []);
 
   const start = useCallback(async (): Promise<void> => {
@@ -294,20 +285,6 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
     [fail],
   );
 
-  const setTorch = useCallback(
-    async (on: boolean): Promise<void> => {
-      const controller = controllerRef.current;
-      if (!controller) return;
-      try {
-        await controller.setTorch(on);
-        if (mountedRef.current) setTorchState(controller.torchOn());
-      } catch (cause) {
-        fail(asCameraError(cause, 'The torch could not be changed.'));
-      }
-    },
-    [fail],
-  );
-
   return {
     videoRef,
     devices,
@@ -325,8 +302,5 @@ export function useCameraReader(options: UseCameraReaderOptions): UseCameraReade
     zoom,
     zoomValue,
     setZoom,
-    torchSupported,
-    torch,
-    setTorch,
   };
 }

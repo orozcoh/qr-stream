@@ -41,8 +41,6 @@ export interface QrStreamStrings {
   switching: string;
   camera: string;
   zoom: string;
-  torchOn: string;
-  torchOff: string;
   stale: string;
   switchToNew: string;
   /** Visible label for the receiver's unlock input. */
@@ -93,8 +91,6 @@ export const DEFAULT_QR_STREAM_STRINGS: Readonly<QrStreamStrings> = Object.freez
   switching: 'Switching…',
   camera: 'Camera',
   zoom: 'Zoom — {value}×',
-  torchOn: 'Torch on',
-  torchOff: 'Torch off',
   stale: 'A different transfer is being sent. This one cannot finish from it.',
   switchToNew: 'Switch to the new transfer',
   passphraseLabel: 'Passphrase',

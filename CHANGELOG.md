@@ -15,6 +15,10 @@ Tooling: development and CI require Node 22.13+ and pnpm 11 (pnpm 11 itself
 requires Node 22.13). The browser bundle is runtime-agnostic and the supported
 browser matrix is unchanged.
 
+Torch is deliberately not part of the 1.0 API: the sender is a screen, so a
+torch adds glare rather than signal. `applyConstraints` remains for advanced
+platform-specific constraints.
+
 ### 1.0 feature surface
 
 - React 18 support (`>=18` peer range) with a dedicated React 18 typecheck and
@@ -28,9 +32,8 @@ browser matrix is unchanged.
 - Wire-based limits: `MAX_WIRE_BYTES` (1 MiB compressed body),
   `MAX_INPUT_BYTES` (8 MiB raw input), `MAX_DECODED_BYTES` (8 MiB decoded), and
   per-call `limits` that may only tighten the defaults.
-- Camera lifecycle on `useCameraReader`: `start()`, `stop()`, `enabled`,
-  `starting`, `torch`, `torchSupported`, and `setTorch()`, with camera failures
-  surfaced as typed errors.
+- Camera lifecycle on `useCameraReader`: `start()`, `stop()`, `enabled`, and
+  `starting`, with camera failures surfaced as typed errors.
 - Packaged React components with `strings` overrides, a `formatError` prop, and
   accessibility fixes (labelled preview and canvas, `role="alert"` errors,
   progress announcements).
@@ -91,9 +94,8 @@ milestone; 0.3.0 never reached npm and `1.0.0-rc.1` supersedes it.
 - Stable `QrStreamErrorCode`s and typed errors (`QrStreamError`,
   `PayloadTooLargeError`, `WrongKeyError`, `CameraError`, `DecoderError`,
   `RenderError`), each carrying a `recovery` hint, plus `isQrStreamError`.
-- `useCameraReader` exposes `start()`, `stop()`, `enabled`, `starting`,
-  `torch`, `torchSupported`, and `setTorch()`; camera failures arrive as typed
-  `QrStreamError`s.
+- `useCameraReader` exposes `start()`, `stop()`, `enabled`, and `starting`;
+  camera failures arrive as typed `QrStreamError`s.
 - The packaged components accept `strings` overrides (with packaged defaults)
   and a `formatError` prop; accessibility fixes include labelled preview and
   canvas, `role="alert"` errors, and progress announcements.

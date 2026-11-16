@@ -34,9 +34,6 @@ function fakeController(overrides: Partial<CameraController> = {}): CameraContro
     zoomRange: vi.fn(() => null),
     setZoom: vi.fn(async () => undefined),
     applyConstraints: vi.fn(async () => undefined),
-    torchSupported: vi.fn(() => false),
-    torchOn: vi.fn(() => false),
-    setTorch: vi.fn(async () => undefined),
     ...overrides,
   };
   const stop = controller.stop;

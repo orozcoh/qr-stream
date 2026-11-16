@@ -25,7 +25,6 @@ export type QrStreamErrorCode =
   | 'CAMERA_IN_USE'
   | 'CAMERA_UNAVAILABLE'
   | 'CAMERA_CONSTRAINTS_FAILED'
-  | 'TORCH_UNSUPPORTED'
   | 'DECODER_FAILED'
   | 'RENDER_FAILED';
 
@@ -65,7 +64,6 @@ export type CameraErrorCode = Extract<
   | 'CAMERA_IN_USE'
   | 'CAMERA_UNAVAILABLE'
   | 'CAMERA_CONSTRAINTS_FAILED'
-  | 'TORCH_UNSUPPORTED'
   | 'DECODER_FAILED'
 >;
 
@@ -138,7 +136,6 @@ export class WrongKeyError extends QrStreamError {
 
 function cameraRecovery(code: CameraErrorCode): QrStreamRecovery {
   if (code === 'CAMERA_PERMISSION_DENIED') return 'grant-permission';
-  if (code === 'TORCH_UNSUPPORTED') return 'none';
   if (code === 'DECODER_FAILED') return 'retry';
   return 'change-camera';
 }

@@ -11,7 +11,7 @@ import { QrStreamReceiver } from '../src/react/QrStreamReceiver.js';
 import { QrStreamSender } from '../src/react/QrStreamSender.js';
 import { expectNoDefaultCopy, expectSentinels, sentinelStrings, sentinelValue } from './helpers/i18n';
 
-// The packaged components only reach the wrong-key, verified, torch, and error
+// The packaged components only reach the wrong-key, verified, and error
 // states after an effect or a camera event. The hooks are stubbed so each state
 // can be rendered directly and its accessible output asserted.
 const h = vi.hoisted(() => {
@@ -48,9 +48,6 @@ const h = vi.hoisted(() => {
       zoom: null as { min: number; max: number; step: number } | null,
       zoomValue: 0,
       setZoom: async (): Promise<void> => undefined,
-      torchSupported: false,
-      torch: false,
-      setTorch: async (): Promise<void> => undefined,
     },
     writer: { writer: null as unknown, error: null as unknown, pending: false },
   };
@@ -94,8 +91,6 @@ const resetState = (): void => {
     diagnostics: null,
     zoom: null,
     zoomValue: 0,
-    torchSupported: false,
-    torch: false,
   });
   Object.assign(h.writer, { writer: null, error: null, pending: false });
 };
@@ -194,27 +189,6 @@ test('camera and reader errors are both formatted and announced', async () => {
   const alerts = [...view.querySelectorAll('p[role="alert"]')].map((node) => node.textContent);
   expect(alerts).toEqual(['err:CAMERA_PERMISSION_DENIED', 'err:INVALID_PACKET']);
   expect(view.textContent).toContain('Camera unavailable');
-});
-
-test('the torch button only exists when the camera reports support', async () => {
-  h.camera.torchSupported = true;
-  h.camera.torch = true;
-
-  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
-  const pressed = view.querySelector('button[aria-pressed]');
-  expect(pressed?.textContent).toBe('Torch on');
-  expect(pressed?.getAttribute('aria-pressed')).toBe('true');
-
-  h.camera.torch = false;
-  const off = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
-  const released = off.querySelector('button[aria-pressed]');
-  expect(released?.textContent).toBe('Torch off');
-  expect(released?.getAttribute('aria-pressed')).toBe('false');
-
-  h.camera.torchSupported = false;
-  const absent = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
-  expect(absent.querySelector('button[aria-pressed]')).toBeNull();
-  expect(absent.textContent).not.toContain('Torch');
 });
 
 test('stale frames offer the switch using the translated copy', async () => {
@@ -333,23 +307,20 @@ test('an oversized file renders the sentinel notice', async () => {
   expectNoDefaultCopy(view.innerHTML);
 });
 
-test('the receiver renders sentinel camera, switch, zoom, and torch copy', async () => {
+test('the receiver renders sentinel camera, switch, and zoom copy', async () => {
   h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
   h.camera.activeId = 'cam1';
   h.camera.zoom = { min: 1, max: 4, step: 0.1 };
   h.camera.zoomValue = 2;
-  h.camera.torchSupported = true;
-  h.camera.torch = true;
   const strings = sentinelStrings();
 
   const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
-  expectSentinels(view.innerHTML, ['camera', 'switchCamera', 'zoom', 'torchOn']);
+  expectSentinels(view.innerHTML, ['camera', 'switchCamera', 'zoom']);
   expectNoDefaultCopy(view.innerHTML);
 
-  h.camera.torch = false;
   h.camera.switching = true;
   const switching = await render(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
-  expectSentinels(switching.innerHTML, ['switching', 'scanning', 'torchOff']);
+  expectSentinels(switching.innerHTML, ['switching', 'scanning']);
   expectNoDefaultCopy(switching.innerHTML);
 });
 
@@ -489,8 +460,6 @@ test('axe: the receiver wrong-key panel has no violations', async () => {
   h.camera.activeId = 'cam1';
   h.camera.zoom = { min: 1, max: 4, step: 0.1 };
   h.camera.zoomValue = 2;
-  h.camera.torchSupported = true;
-  h.camera.torch = true;
   h.reader.wrongKey = true;
   h.reader.error = new WrongKeyError();
   const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
@@ -589,14 +558,12 @@ test('keyboard: receiver camera, zoom, and unlock controls are reachable in DOM 
   h.camera.activeId = 'cam1';
   h.camera.zoom = { min: 1, max: 4, step: 0.1 };
   h.camera.zoomValue = 2;
-  h.camera.torchSupported = true;
   h.reader.wrongKey = true;
   h.reader.error = new WrongKeyError();
   await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
 
-  expect(await tabOrder(8)).toEqual([
+  expect(await tabOrder(7)).toEqual([
     'button:Switch camera',
-    'button:Torch off',
     'select:Camera',
     'input:Zoom — 2.0×',
     'input:Passphrase',
@@ -627,7 +594,6 @@ test('every form control is associated with a non-empty label', async () => {
   h.camera.activeId = 'cam1';
   h.camera.zoom = { min: 1, max: 4, step: 0.1 };
   h.camera.zoomValue = 2;
-  h.camera.torchSupported = true;
   const receiver = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
   const receiverControls = [...receiver.querySelectorAll('input, select')];
   expect(receiverControls.length).toBe(2);
@@ -651,7 +617,6 @@ test('every button and the QR canvas has an accessible name', async () => {
 
   h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
   h.camera.activeId = 'cam1';
-  h.camera.torchSupported = true;
   h.reader.wrongKey = true;
   h.reader.error = new WrongKeyError();
   const receiver = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));

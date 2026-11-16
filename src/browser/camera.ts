@@ -13,7 +13,6 @@ export interface CameraDevice {
 export interface CameraCapabilities {
   zoom?: { min: number; max: number; step?: number };
   focusMode?: string[];
-  torch?: boolean;
   [key: string]: unknown;
 }
 
@@ -44,9 +43,6 @@ export interface CameraController {
   zoomRange(): { min: number; max: number; step: number } | null;
   setZoom(value: number): Promise<void>;
   applyConstraints(constraints: MediaTrackConstraints): Promise<void>;
-  torchSupported(): boolean;
-  torchOn(): boolean;
-  setTorch(on: boolean): Promise<void>;
 }
 
 export interface ReadOptions {
@@ -149,7 +145,6 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
   let errorHandler: ((error: QrStreamError) => void) | null = null;
   let consecutiveFailures = 0;
   let reportedDecodeFailure = false;
-  let torchState = false;
 
   const report = (error: QrStreamError): void => errorHandler?.(error);
 
@@ -178,9 +173,8 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     video.srcObject = next;
     await video.play().catch(() => undefined);
 
-    const settings = next.getVideoTracks()[0]?.getSettings() as (MediaTrackSettings & { torch?: boolean }) | undefined;
+    const settings = next.getVideoTracks()[0]?.getSettings();
     active = settings?.deviceId ?? active;
-    torchState = settings?.torch === true;
     if (active) {
       try {
         localStorage.setItem(STORAGE_KEY, active);
@@ -325,7 +319,6 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null;
     active = null;
-    torchState = false;
     video.srcObject = null;
     navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
     if (!disposed) {
@@ -421,31 +414,6 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
         const error = new CameraError('CAMERA_CONSTRAINTS_FAILED', 'The camera rejected the requested constraints.', {
           cause,
         });
-        report(error);
-        throw error;
-      }
-    },
-
-    torchSupported(): boolean {
-      const track = stream?.getVideoTracks()[0];
-      return (track?.getCapabilities() as CameraCapabilities | undefined)?.torch === true;
-    },
-
-    torchOn: () => torchState,
-
-    async setTorch(on: boolean): Promise<void> {
-      const track = stream?.getVideoTracks()[0];
-      if (!track || (track.getCapabilities() as CameraCapabilities | undefined)?.torch !== true) {
-        const error = new CameraError('TORCH_UNSUPPORTED', 'This camera does not support the torch.');
-        report(error);
-        throw error;
-      }
-      try {
-        // `torch` is a Chrome extension, absent from the DOM constraint types.
-        await track.applyConstraints({ advanced: [{ torch: on } as unknown as MediaTrackConstraintSet] });
-        torchState = on;
-      } catch (cause) {
-        const error = new CameraError('CAMERA_CONSTRAINTS_FAILED', 'The torch could not be changed.', { cause });
         report(error);
         throw error;
       }

@@ -95,7 +95,6 @@ origin.
 | `CAMERA_IN_USE` | Another app or tab holds the camera. | Close the other app/tab. iOS allows one active camera stream per app. |
 | `CAMERA_UNAVAILABLE` | Opening or setup failed for another reason. | Stop and start again; check `error.cause` for the original `DOMException`. |
 | `CAMERA_CONSTRAINTS_FAILED` | The requested constraints were refused. | Remove strict `videoConstraints`; use `cycle()`/`select()` instead. |
-| `TORCH_UNSUPPORTED` | The active track has no torch capability. | Hide the control. The packaged receiver does this automatically. |
 
 A failed `start()` does **not** reject; it records `error`. Handle the state:
 
