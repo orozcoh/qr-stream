@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import userEvent from '@testing-library/user-event';
+import axe from 'axe-core';
 import { act, createElement, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -417,4 +419,258 @@ test('the active camera line renders sentinel copy, including the unnamed fallba
   );
   expectSentinels(unnamed.innerHTML, ['unnamed']);
   expectNoDefaultCopy(unnamed.innerHTML);
+});
+
+// --- axe -------------------------------------------------------------------
+// axe inspects the real jsdom DOM, but jsdom has no layout engine and no canvas
+// implementation. Contrast cannot be measured: axe reports every element as
+// `incomplete` and its canvas probe throws "Not implemented". The rule is
+// disabled here rather than faked; contrast remains a manual/visual check.
+// `video-caption` stays enabled and lands in `incomplete` because axe cannot
+// tell whether the feed carries audio; a live camera preview has none, so the
+// rule is inapplicable rather than suppressed. Everything else runs with axe's
+// default rule set (WCAG 2.0/2.1/2.2 A+AA plus best practice).
+const AXE_OPTIONS: axe.RunOptions = {
+  rules: { 'color-contrast': { enabled: false } },
+};
+
+function summarizeViolations(violations: readonly axe.Result[]): string[] {
+  return violations.map(
+    (violation) =>
+      `${violation.id} (${violation.impact ?? 'unknown'}): ${violation.nodes
+        .map((node) => node.target.join(' '))
+        .join(', ')}`,
+  );
+}
+
+async function expectNoAxeViolations(container: HTMLElement): Promise<void> {
+  const results = await axe.run(container, AXE_OPTIONS);
+  // Guard against a run that checks nothing: axe's own version must be the
+  // installed one and at least one rule must have passed before an empty
+  // violation list means anything.
+  expect(results.testEngine.name).toBe('axe-core');
+  expect(results.testEngine.version).toBe(axe.version);
+  expect(results.passes.length).toBeGreaterThan(0);
+  expect(summarizeViolations(results.violations)).toEqual([]);
+}
+
+test('axe: the harness reports a known violation', async () => {
+  const broken = document.createElement('div');
+  broken.innerHTML = '<img src="missing.png">';
+  document.body.append(broken);
+  try {
+    const results = await axe.run(broken, AXE_OPTIONS);
+    expect(results.violations.map((violation) => violation.id)).toContain('image-alt');
+  } finally {
+    broken.remove();
+  }
+});
+
+test('axe: the default sender render has no violations', async () => {
+  const view = await render(createElement(QrStreamSender, { accept: '.json' }));
+  await expectNoAxeViolations(view);
+});
+
+test('axe: the running sender render has no violations', async () => {
+  h.writer.writer = { k: 40 };
+  const view = await render(createElement(QrStreamSender, {}));
+  await clickButton(view, 'Start stream');
+  await expectNoAxeViolations(view);
+});
+
+test('axe: the default receiver render has no violations', async () => {
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  await expectNoAxeViolations(view);
+});
+
+test('axe: the receiver wrong-key panel has no violations', async () => {
+  h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
+  h.camera.activeId = 'cam1';
+  h.camera.zoom = { min: 1, max: 4, step: 0.1 };
+  h.camera.zoomValue = 2;
+  h.camera.torchSupported = true;
+  h.camera.torch = true;
+  h.reader.wrongKey = true;
+  h.reader.error = new WrongKeyError();
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  await expectNoAxeViolations(view);
+});
+
+test('axe: the completed receiver render has no violations', async () => {
+  h.reader.result = { data: new Uint8Array([1, 2, 3]), meta: { filename: 'report.json' } };
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  await expectNoAxeViolations(view);
+});
+
+// --- keyboard --------------------------------------------------------------
+const normalize = (value: string | null | undefined): string => (value ?? '').replace(/\s+/g, ' ').trim();
+
+/** A stable name for the focused element, preferring its associated label. */
+function describeFocus(element: Element | null): string {
+  if (!(element instanceof HTMLElement) || element === document.body) return 'body';
+  const tag = element.tagName.toLowerCase();
+  if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+    const label = element.labels?.[0];
+    // A wrapping label also contains the control's own options/text; its first
+    // element child is the visible caption. An explicit `for=` label holds only
+    // the caption already.
+    const caption = normalize(
+      label !== undefined && label.contains(element) ? label.firstElementChild?.textContent : label?.textContent,
+    );
+    if (caption) return `${tag}:${caption}`;
+  }
+  return `${tag}:${normalize(element.getAttribute('aria-label') ?? element.textContent)}`;
+}
+
+async function tabOrder(limit: number): Promise<string[]> {
+  const user = userEvent.setup({ document });
+  const order: string[] = [];
+  for (let index = 0; index < limit; index += 1) {
+    await act(async () => {
+      await user.tab();
+    });
+    order.push(describeFocus(document.activeElement));
+  }
+  return order;
+}
+
+test('keyboard: the sender exposes its controls in DOM order with labels', async () => {
+  h.writer.writer = { k: 40 };
+  await render(createElement(QrStreamSender, { accept: '.json' }));
+
+  expect(await tabOrder(4)).toEqual([
+    'button:Start stream',
+    'input:File — .json',
+    'select:Density',
+    'input:Passphrase — optional',
+  ]);
+});
+
+test('keyboard: the running sender exposes the speed range before the stop button in DOM order', async () => {
+  h.writer.writer = { k: 40 };
+  const view = await render(createElement(QrStreamSender, {}));
+  await clickButton(view, 'Start stream');
+
+  const order = await tabOrder(3);
+  // The slider is rendered above the primary action while running, so it is
+  // the first stop; the estimate depends on k and the preset, so only the
+  // label prefix is asserted.
+  expect(order[0]).toMatch(/^input:Speed — 12 fps · ~\d+ s to receive$/);
+  expect(order[1]).toBe('button:Stop stream');
+  expect(order[2]).toBe('body');
+});
+
+// jsdom never applies the browser's "closed <details> hides its content" rule,
+// so a tab walk keeps going into a closed panel. The default-state assertion is
+// limited to the first stop, which is accurate in both engines.
+test('keyboard: nothing precedes the diagnostics toggle in the default receiver', async () => {
+  await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  expect(await tabOrder(1)).toEqual(['summary:Cameras reported by this browser (0)']);
+});
+
+test('keyboard: an opened diagnostics panel puts rescan after its toggle', async () => {
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  const details = view.querySelector('details');
+  expect(details).not.toBeNull();
+  details!.open = true;
+
+  expect(await tabOrder(2)).toEqual(['summary:Cameras reported by this browser (0)', 'button:Rescan cameras']);
+});
+
+test('keyboard: receiver camera, zoom, and unlock controls are reachable in DOM order', async () => {
+  h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
+  h.camera.activeId = 'cam1';
+  h.camera.zoom = { min: 1, max: 4, step: 0.1 };
+  h.camera.zoomValue = 2;
+  h.camera.torchSupported = true;
+  h.reader.wrongKey = true;
+  h.reader.error = new WrongKeyError();
+  await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+
+  expect(await tabOrder(8)).toEqual([
+    'button:Switch camera',
+    'button:Torch off',
+    'select:Camera',
+    'input:Zoom — 2.0×',
+    'input:Passphrase',
+    'button:Unlock',
+    'summary:Cameras reported by this browser (2)',
+    'button:Rescan cameras',
+  ]);
+});
+
+test('every form control is associated with a non-empty label', async () => {
+  h.writer.writer = { k: 40 };
+  const idle = await render(createElement(QrStreamSender, { accept: '.json' }));
+  const idleControls = [...idle.querySelectorAll('input, select')];
+  expect(idleControls.length).toBe(3);
+
+  for (const control of idleControls) {
+    const labels = (control as HTMLInputElement).labels;
+    expect(labels, `${control.outerHTML} has no label`).not.toBeNull();
+    expect(labels?.length).toBeGreaterThan(0);
+    expect(normalize(labels?.[0]?.textContent), control.outerHTML).not.toBe('');
+  }
+
+  await clickButton(idle, 'Start stream');
+  const range = idle.querySelector('input[type="range"]') as HTMLInputElement;
+  expect(normalize(range.labels?.[0]?.textContent)).toMatch(/^Speed — 12 fps · ~\d+ s to receive$/);
+
+  h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
+  h.camera.activeId = 'cam1';
+  h.camera.zoom = { min: 1, max: 4, step: 0.1 };
+  h.camera.zoomValue = 2;
+  h.camera.torchSupported = true;
+  const receiver = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  const receiverControls = [...receiver.querySelectorAll('input, select')];
+  expect(receiverControls.length).toBe(2);
+
+  for (const control of receiverControls) {
+    const labels = (control as HTMLInputElement).labels;
+    expect(normalize(labels?.[0]?.textContent), control.outerHTML).not.toBe('');
+  }
+});
+
+test('every button and the QR canvas has an accessible name', async () => {
+  h.writer.writer = { k: 40 };
+  const sender = await render(createElement(QrStreamSender, {}));
+  await clickButton(sender, 'Start stream');
+  for (const button of sender.querySelectorAll('button')) {
+    expect(normalize(button.textContent), button.outerHTML).not.toBe('');
+  }
+  const canvas = sender.querySelector('canvas');
+  expect(canvas?.getAttribute('role')).toBe('img');
+  expect(canvas?.getAttribute('aria-label')).toBe('QR stream');
+
+  h.camera.devices = [device('cam1', 'Back camera'), device('cam2', 'Front camera')];
+  h.camera.activeId = 'cam1';
+  h.camera.torchSupported = true;
+  h.reader.wrongKey = true;
+  h.reader.error = new WrongKeyError();
+  const receiver = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+  for (const button of receiver.querySelectorAll('button')) {
+    expect(normalize(button.textContent), button.outerHTML).not.toBe('');
+  }
+  expect(receiver.querySelector('video')?.getAttribute('aria-label')).toBe('Camera preview');
+});
+
+test('an error is an alert that announces without stealing focus from the retry field', async () => {
+  h.reader.wrongKey = true;
+  h.reader.error = new WrongKeyError();
+  const view = await render(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+
+  const alert = view.querySelector('[role="alert"]');
+  expect(alert?.textContent).toBe('That passphrase does not match. Try again — no need to rescan.');
+  // Announced by role, not reached by tab: the alert has no tabindex.
+  expect(alert?.hasAttribute('tabindex')).toBe(false);
+
+  const input = view.querySelector<HTMLInputElement>('input[type="password"]');
+  expect(input).not.toBeNull();
+  await act(async () => {
+    input!.focus();
+  });
+  expect(document.activeElement).toBe(input);
+
+  // The alert did not take focus, and tab continues from the field to Unlock.
+  expect(await tabOrder(1)).toEqual(['button:Unlock']);
 });

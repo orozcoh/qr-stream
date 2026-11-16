@@ -226,8 +226,30 @@ describe('strings', () => {
     expect(formatQrString('{name}', { name: '$& $1 $$ $`' })).toBe('$& $1 $$ $`');
   });
 
+  test('keeps $& and $1 literal when they are the whole value or one of several', () => {
+    expect(formatQrString('{a}/{b}', { a: '$&', b: '$1' })).toBe('$&/$1');
+    // `$1` outside the placeholder is template text, not a replacement pattern.
+    expect(formatQrString('pre $1 {name} post $&', { name: '$&' })).toBe('pre $1 $& post $&');
+  });
+
   test('leaves unknown placeholders intact', () => {
     expect(formatQrString('{known} {missing}', { known: 'x' })).toBe('x {missing}');
+    expect(formatQrString('{a}-{b}-{a}', { a: 'A' })).toBe('A-{b}-A');
+  });
+
+  test('renders numeric values, including zero and negatives', () => {
+    expect(formatQrString('{count}', { count: 0 })).toBe('0');
+    expect(formatQrString('{n} of {k}', { n: 3, k: 10 })).toBe('3 of 10');
+    expect(formatQrString('{delta}', { delta: -2 })).toBe('-2');
+  });
+
+  test('treats an undefined value as a missing substitution', () => {
+    const values = { present: 'x', absent: undefined } as unknown as Readonly<Record<string, string | number>>;
+    expect(formatQrString('{present} {absent}', values)).toBe('x {absent}');
+  });
+
+  test('does not re-substitute braces that arrive through a value', () => {
+    expect(formatQrString('{outer}', { outer: '{inner}', inner: 'nope' })).toBe('{inner}');
   });
 
   test('treats an undefined override as absent', () => {
