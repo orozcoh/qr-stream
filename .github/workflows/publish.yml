@@ -1,0 +1,139 @@
+name: publish
+
+# The only path that produces signed npm provenance. A local `pnpm release:publish`
+# has no OIDC identity, so it publishes unsigned; this workflow runs on a
+# GitHub-hosted runner with `id-token: write` and lets npm attest the tarball.
+#
+# It publishes only: no tags, no GitHub release, no pushes. After a real run,
+# `pnpm release:publish --resume` on main creates the tag and release (it skips
+# the already-published npm step). Dry run is the default input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish; must equal package.json (blank = package.json version)'
+        required: false
+        type: string
+      dist_tag:
+        description: 'npm dist-tag'
+        required: false
+        default: latest
+        type: string
+      dry_run:
+        description: 'Pack and run npm publish --dry-run without uploading'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# Never let two publishes race, and never cancel one halfway through.
+concurrency:
+  group: publish-${{ inputs.dist_tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # required for provenance; the only write this job needs
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 11
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Publish the commit that is actually on main, and only the version that
+      # package.json and the changelog already describe. A mismatch is a
+      # mistake in the dispatch, not something to reconcile here.
+      - name: Verify branch, version, and changelog
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::publish must be dispatched from main (got ${GITHUB_REF})"
+            exit 1
+          fi
+          pkg=$(node -p "require('./package.json').version")
+          version="${REQUESTED_VERSION:-$pkg}"
+          if [ "$version" != "$pkg" ]; then
+            echo "::error::requested $version does not match package.json $pkg"
+            exit 1
+          fi
+          if ! grep -Eq "^##[[:space:]]+${version//./\\.}([[:space:]]|$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section"
+            exit 1
+          fi
+          echo "### Publishing @orozcoh/qr-stream@$version" >> "$GITHUB_STEP_SUMMARY"
+          echo "dist-tag: \`${{ inputs.dist_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Check API report
+        run: pnpm api:check
+
+      - name: Check package
+        run: pnpm check:package
+
+      # Provenance comes from the job's OIDC token, not from the npm token: the
+      # token authenticates the publish, Sigstore signs the attestation.
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ inputs.dist_tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(--provenance --access public --tag "$DIST_TAG")
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::dry run — npm publish --dry-run ${args[*]}"
+            npm publish --dry-run "${args[@]}"
+            echo "Dry run: nothing was uploaded." >> "$GITHUB_STEP_SUMMARY"
+          else
+            npm publish "${args[@]}"
+            echo "Published with provenance. Tag and GitHub release are next." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Tags and releases stay owned by scripts/release.mjs: it checks main is
+      # clean and synced, refuses a tag that points elsewhere, and writes the
+      # release body from the changelog.
+      - name: Next steps
+        if: ${{ !inputs.dry_run }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### Tag and GitHub release are not automated
+
+          Run this locally from `main` after the publish:
+
+          ```bash
+          pnpm release:check
+          pnpm release:publish --resume   # skips npm (already published), tags, releases, smoke-tests
+          ```
+          EOF

@@ -529,10 +529,11 @@ pnpm release:prepare 0.3.0   # bump, changelog check, tests, PR, verify, merge
 pnpm release:publish         # tag, npm publish, GitHub release, smoke test
 ```
 
-The full procedure — the authoritative CI gate, provenance, the demo deploy,
-and rollback — is in [docs/release.md](docs/release.md). Local publishes are
-unsigned; `--provenance` is added only when npm can sign it from a CI OIDC
-identity.
+The full procedure — the authoritative CI gate, the `publish.yml` provenance
+path, the demo deploy, and rollback — is in [docs/release.md](docs/release.md).
+Publishes from `.github/workflows/publish.yml` are signed; a local
+`pnpm release:publish` is unsigned, because `--provenance` needs a CI OIDC
+identity that a laptop does not have.
 
 - `release:prepare` requires a `## <version>` section in `CHANGELOG.md`; it
   refuses to bump without one. You can write that section on `main` and leave

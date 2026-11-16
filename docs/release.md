@@ -1,12 +1,17 @@
 # Release guide
 
-Releases are two-phase and mostly automated by `scripts/release.mjs`:
+Releases are two-phase. `scripts/release.mjs` owns the version bump, the PR, the
+tag, the GitHub release, and the smoke test:
 
 ```bash
 pnpm release:check          # read-only preflight
 pnpm release:prepare 0.3.1  # bump, changelog, tests, PR, verify, merge
 pnpm release:publish        # tag, npm publish, GitHub release, smoke test
 ```
+
+Signed npm provenance comes from a separate `workflow_dispatch` job,
+[`publish.yml`](../.github/workflows/publish.yml); a local `release:publish`
+upload is unsigned. See [Publish](#5-publish) for which path to use.
 
 `release:prepare` and `release:publish` both refuse to run unless the current
 branch is `main`, the worktree is clean, local `main` matches `origin/main`,
@@ -126,6 +131,63 @@ a failed publish.
 
 ## 5. Publish
 
+Two publishers are supported. Use the CI workflow when you want a signed
+provenance attestation; use the local script when CI is unavailable or the npm
+publish already happened. Both need the changelog section from step 2 and a
+green gate, and neither creates a release note you have not written.
+
+### 5a. CI publish — the provenance path
+
+`.github/workflows/publish.yml` is the only path that produces signed npm
+provenance. It is `workflow_dispatch` only, refuses any ref except `main`, and
+refuses a version that does not match both `package.json` and `CHANGELOG.md`.
+
+One-time setup:
+
+- Create a repository secret `NPM_TOKEN`: an npm automation token with publish
+  rights on `@orozcoh`. It authenticates the upload; it does not sign anything.
+- Leave the workflow's `permissions` alone: `contents: read` plus
+  `id-token: write`. The OIDC token, not the npm token, is what Sigstore uses to
+  attest the tarball.
+- If you would rather not store a token, configure npm trusted publishing for
+  this repository and remove the `NODE_AUTH_TOKEN` line from the publish step.
+  The `id-token: write` permission is required either way.
+
+`dry_run` defaults to **true**, so the first dispatch packs and reports without
+uploading:
+
+```bash
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=0.3.1 -f dist_tag=latest -f dry_run=true
+gh run watch --repo orozcoh/qr-stream
+```
+
+When the dry run is green, dispatch again with `-f dry_run=false`. The job runs,
+in order: frozen install, branch/version/changelog check, `pnpm lint`,
+`pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm api:check`,
+`pnpm check:package`, then
+
+```bash
+npm publish --provenance --access public --tag <dist_tag>
+```
+
+It does **not** tag, push, or create a GitHub release. Tags and release notes
+stay with `scripts/release.mjs`, which knows how to check that `main` is clean
+and synced and refuses a tag that points elsewhere. After a successful CI
+publish, finish locally from the same commit:
+
+```bash
+pnpm release:check
+pnpm release:publish --resume   # skips npm (already published), tags, releases, smoke-tests
+```
+
+`--resume` is what makes this safe: the script sees the version on npm, skips
+the upload, and still creates the annotated tag and the GitHub release. It still
+requires `npm whoami` to succeed, so `npm login` first even though nothing is
+uploaded.
+
+### 5b. Local publish — unsigned
+
 ```bash
 pnpm release:publish --dry-run   # prints the plan, changes nothing
 pnpm release:publish
@@ -148,6 +210,12 @@ Useful flags: `--yes` (skip confirmations), `NPM_OTP=123456` for a 2FA account
 (passed to npm as `--otp`), `--tag next` for a prerelease dist-tag, `--resume`
 after a partial publish, `--update-release` to refresh the notes.
 
+A local publish is **unsigned**. There is no OIDC identity on a laptop, so
+`scripts/release.mjs` omits `--provenance` and prints
+`provenance: skipped — …`. npm itself refuses the flag outside a supported CI
+(`EUSAGE: Automatic provenance generation not supported for provider: undefined`),
+so passing it would fail the publish rather than degrade gracefully.
+
 ### Provenance
 
 npm provenance is a signed attestation that links the published tarball to the
@@ -161,20 +229,12 @@ GitHub Actions, which additionally requires:
 - the public `repository` field in `package.json` to match the GitHub repository
   (case-sensitive).
 
-`scripts/release.mjs` adds `--provenance` to `npm publish` only when all of that
-is visible. In the normal local path none of it is, so the flag is omitted and
-the script prints a note saying the publish is unsigned. npm itself refuses the
-flag outside a supported CI — `EUSAGE: Automatic provenance generation not
-supported for provider: undefined` — so passing it blindly would fail the
-publish rather than degrade gracefully.
-
-So: **releases published from a developer machine are not signed.** The code
-path for a signed publish exists and is exercised whenever the script runs
-inside GitHub Actions with `id-token: write`, but this repository ships no
-publish workflow, so the supported procedure is the local one above. If you add
-one, keep it `workflow_dispatch`-only, grant `id-token: write` (never a
-long-lived `NODE_AUTH_TOKEN`), and publish from a commit that is already tagged —
-do not let it tag, push, or merge on its own.
+`publish.yml` satisfies all three and passes `--provenance` on every real
+publish. Its dry run does not exercise the attestation: npm skips the whole
+upload path under `--dry-run`, so a green dry run proves the pack, the version,
+the registry and the auth wiring — not the signature. `scripts/release.mjs`
+adds the flag only when the same conditions are visible; locally none are, so it
+publishes unsigned and says so.
 
 To check what a published version carries:
 
@@ -185,13 +245,16 @@ npm audit signatures                                   # in a consuming project
 
 A missing attestation is not a vulnerability; it means "published from a
 machine, not from a CI identity". Record that in the release notes if it
-matters to your consumers.
+matters to your consumers. If the `publish.yml` run itself fails at
+`npm publish`, the attestation was never created — the registry has no partial
+state to clean up, because npm uploads and attestation are one request.
 
 ## 6. Tag and GitHub release
 
-`release:prepare` and `publish` create both, so normally there is nothing to do
-by hand. If a publish failed after the tag was pushed, finish it manually rather
-than re-tagging:
+`release:prepare` and a local `release:publish` create both, and after a CI
+publish `pnpm release:publish --resume` creates them, so normally there is
+nothing to do by hand. If a publish failed after the tag was pushed, finish it
+manually rather than re-tagging:
 
 ```bash
 git tag -l v0.3.1                     # must point at HEAD
@@ -280,9 +343,13 @@ Do not reuse the rolled-back version number.
 - [ ] Breaking changes, wire-format changes, and security fixes are called out.
 - [ ] The full gate is green (at minimum, the subset `prepare` runs plus
       `check:package` and `api:check`).
-- [ ] `pnpm release:publish --dry-run` prints the expected tag and version.
-- [ ] The publish was either signed from CI (provenance) or explicitly noted as
-      unsigned.
+- [ ] `publish.yml` ran with `dry_run=true` and reported the expected version,
+      then again with `dry_run=false` (or the local `pnpm release:publish
+      --dry-run` printed the expected tag and version for an unsigned publish).
+- [ ] The publish was signed by `publish.yml` (provenance present) or is
+      explicitly recorded as an unsigned local publish.
+- [ ] `pnpm release:publish --resume` created the tag and GitHub release after a
+      CI publish (it skips the already-uploaded npm step).
 - [ ] The demo deploy for the merge commit succeeded, including the header and
       asset-hash assertions.
 - [ ] The GitHub release body matches the changelog section.
