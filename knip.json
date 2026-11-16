@@ -8,9 +8,9 @@
     "tests/react18/ref.tsx",
     "src/browser/decoders/zxing.ts",
     "scripts/release.mjs",
+    "bench/run.ts",
     "demo/e2e.tsx"
   ],
-  "ignoreDependencies": ["@types/emscripten", "zxing-wasm"],
   "ignore": ["tests/fixtures/v0.2/**"],
   "ignoreExportsUsedInFile": { "interface": true }
 }

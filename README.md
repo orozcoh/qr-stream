@@ -14,6 +14,7 @@ the reliability claims below are proven by tests rather than by hoping.
 - [Offline requirements](#offline-requirements)
 - [Integration guide](docs/integration.md)
 - [Wire format](docs/wire-format.md)
+- [Performance](docs/performance.md)
 
 ## Why it works
 

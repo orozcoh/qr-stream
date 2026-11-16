@@ -1,0 +1,306 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-11-16T11:24:16.719Z",
+  "runtime": {
+    "node": "v25.6.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "release": "25.5.0"
+  },
+  "environment": {
+    "cpu": "Apple M1",
+    "cores": 8,
+    "totalMemoryMiB": 8192,
+    "forcedGc": true
+  },
+  "metrics": [
+    {
+      "id": "writer.json.plain",
+      "group": "writer",
+      "description": "gzip + SHA-256 + block split, 1 MiB compressible JSON, no passphrase",
+      "unit": "ms",
+      "value": 6.4338,
+      "p50": 6.3457,
+      "p99": 7.7997,
+      "rme": 0.78,
+      "samples": 125
+    },
+    {
+      "id": "writer.random.plain",
+      "group": "writer",
+      "description": "gzip attempt + SHA-256 + block split, 1 MiB incompressible data",
+      "unit": "ms",
+      "value": 21.0557,
+      "p50": 20.6422,
+      "p99": 23.374,
+      "rme": 1.44,
+      "samples": 38
+    },
+    {
+      "id": "writer.random.encodeRepair",
+      "group": "writer",
+      "description": "encode one repair symbol for the 1 MiB / fast-preset stream",
+      "unit": "ms",
+      "value": 0.0928,
+      "p50": 0.092,
+      "p99": 0.1065,
+      "rme": 0.12,
+      "samples": 8620
+    },
+    {
+      "id": "writer.json.encrypted",
+      "group": "writer",
+      "description": "1 MiB compressible JSON with PBKDF2 (600k) + AES-GCM",
+      "unit": "ms",
+      "value": 78.6669,
+      "p50": 77.6401,
+      "p99": 92.982,
+      "rme": 1.7,
+      "samples": 32
+    },
+    {
+      "id": "writer.random.encrypted",
+      "group": "writer",
+      "description": "1 MiB incompressible data with PBKDF2 (600k) + AES-GCM",
+      "unit": "ms",
+      "value": 94.0533,
+      "p50": 92.1887,
+      "p99": 118.1795,
+      "rme": 2.65,
+      "samples": 27
+    },
+    {
+      "id": "writer.random.plain.heap",
+      "group": "writer",
+      "description": "approximate retained heap + ArrayBuffer after a plain 1 MiB prepare",
+      "unit": "MiB",
+      "value": 2.0046,
+      "p50": 2.0046,
+      "p99": 2.0046,
+      "rme": 0,
+      "samples": 1,
+      "approximate": true
+    },
+    {
+      "id": "writer.random.encrypted.heap",
+      "group": "writer",
+      "description": "approximate retained heap + ArrayBuffer after an encrypted 1 MiB prepare",
+      "unit": "MiB",
+      "value": 2.0097,
+      "p50": 2.0097,
+      "p99": 2.0097,
+      "rme": 0,
+      "samples": 1,
+      "approximate": true
+    },
+    {
+      "id": "fountain.stream.decode",
+      "group": "fountain",
+      "description": "decode a lossy 1 MiB / fast-preset stream (1/4 of systematic frames missing)",
+      "unit": "ms",
+      "value": 978.9861,
+      "p50": 959.1828,
+      "p99": 1062.9325,
+      "rme": 4.69,
+      "samples": 6
+    },
+    {
+      "id": "fountain.stream.assemble",
+      "group": "fountain",
+      "description": "concatenate 1252 solved blocks into the 1 MiB payload",
+      "unit": "ms",
+      "value": 0.1631,
+      "p50": 0.1471,
+      "p99": 0.8347,
+      "rme": 1.61,
+      "samples": 4292
+    },
+    {
+      "id": "fountain.stream.symbolsToComplete",
+      "group": "fountain",
+      "description": "packets needed to close the lossy 1 MiB stream (lower is better)",
+      "unit": "packets",
+      "value": 1254,
+      "p50": 1254,
+      "p99": 1254,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v20.packetToMatrix",
+      "group": "render",
+      "description": "encode one full packet as a version 20 QR matrix",
+      "unit": "ms",
+      "value": 11.6944,
+      "p50": 11.6249,
+      "p99": 12.7641,
+      "rme": 0.56,
+      "samples": 60
+    },
+    {
+      "id": "render.v40.packetToMatrix",
+      "group": "render",
+      "description": "encode one full packet as a version 40 QR matrix",
+      "unit": "ms",
+      "value": 39.4975,
+      "p50": 39.3582,
+      "p99": 40.8326,
+      "rme": 0.54,
+      "samples": 18
+    },
+    {
+      "id": "render.v20.matrixToRGBA",
+      "group": "render",
+      "description": "expand a version 20 matrix at scale 1 (one pixel per module + quiet zone)",
+      "unit": "ms",
+      "value": 0.1245,
+      "p50": 0.1228,
+      "p99": 0.138,
+      "rme": 0.49,
+      "samples": 5624
+    },
+    {
+      "id": "render.v40.matrixToRGBA",
+      "group": "render",
+      "description": "expand a version 40 matrix at scale 1 (one pixel per module + quiet zone)",
+      "unit": "ms",
+      "value": 0.4279,
+      "p50": 0.4246,
+      "p99": 0.4554,
+      "rme": 0.37,
+      "samples": 1636
+    },
+    {
+      "id": "render.v20.paintFrame",
+      "group": "render",
+      "description": "full paint path per frame at v20 (fake canvas; excludes raster compositing)",
+      "unit": "ms",
+      "value": 11.8898,
+      "p50": 11.8772,
+      "p99": 11.999,
+      "rme": 0.65,
+      "samples": 6
+    },
+    {
+      "id": "render.v40.paintFrame",
+      "group": "render",
+      "description": "full paint path per frame at v40 (fake canvas; excludes raster compositing)",
+      "unit": "ms",
+      "value": 40.3021,
+      "p50": 40.2589,
+      "p99": 40.5792,
+      "rme": 0.45,
+      "samples": 6
+    },
+    {
+      "id": "render.v20.sustainedFps",
+      "group": "render",
+      "description": "derived frames/second from the v20 paint measurement (60 Hz refresh)",
+      "unit": "fps",
+      "value": 84.1057,
+      "p50": 84.1057,
+      "p99": 84.1057,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v40.sustainedFps",
+      "group": "render",
+      "description": "derived frames/second from the v40 paint measurement (60 Hz refresh)",
+      "unit": "fps",
+      "value": 24.8126,
+      "p50": 24.8126,
+      "p99": 24.8126,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v40.rgbaKiB",
+      "group": "render",
+      "description": "bytes allocated per v40 frame by matrixToRGBA, including the 4-module quiet zone",
+      "unit": "KiB",
+      "value": 133.6914,
+      "p50": 133.6914,
+      "p99": 133.6914,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "reader.stream.add",
+      "group": "reader",
+      "description": "add every accepted packet of the lossy 1 MiB stream (CRC + plausibility + fountain)",
+      "unit": "ms",
+      "value": 962.5787,
+      "p50": 961.104,
+      "p99": 968.1273,
+      "rme": 0.34,
+      "samples": 6
+    },
+    {
+      "id": "reader.stream.reassemble",
+      "group": "reader",
+      "description": "the same add loop plus result(): SHA-256 verification of 1 MiB",
+      "unit": "ms",
+      "value": 967.248,
+      "p50": 965.7685,
+      "p99": 977.2419,
+      "rme": 0.63,
+      "samples": 6
+    },
+    {
+      "id": "reader.frame.add",
+      "group": "reader",
+      "description": "derived mean cost per accepted frame at 15 fps",
+      "unit": "ms",
+      "value": 0.7676,
+      "p50": 0.7676,
+      "p99": 0.7676,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "reader.zxing.startup",
+      "group": "reader",
+      "description": "compile instantiate the zxing reader wasm (Node, binary from disk)",
+      "unit": "ms",
+      "value": 5.4359,
+      "p50": 5.4359,
+      "p99": 5.4359,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "reader.zxing.720p.v20",
+      "group": "reader",
+      "description": "read a synthetic 1280x720 frame containing a version 20 code",
+      "unit": "ms",
+      "value": 5.4882,
+      "p50": 5.4438,
+      "p99": 5.9092,
+      "rme": 0.62,
+      "samples": 219
+    },
+    {
+      "id": "reader.zxing.720p.v40",
+      "group": "reader",
+      "description": "read a synthetic 1280x720 frame containing a version 40 code",
+      "unit": "ms",
+      "value": 7.0339,
+      "p50": 6.9813,
+      "p99": 8.0357,
+      "rme": 0.63,
+      "samples": 171
+    },
+    {
+      "id": "reader.zxing.1080p.v40",
+      "group": "reader",
+      "description": "read a synthetic 1920x1080 frame containing a version 40 code",
+      "unit": "ms",
+      "value": 14.0191,
+      "p50": 13.9955,
+      "p99": 14.2178,
+      "rme": 0.13,
+      "samples": 86
+    }
+  ]
+}

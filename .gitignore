@@ -24,3 +24,6 @@ skills-lock.json
 
 # API Extractor scratch space (reports under etc/ are committed)
 tmp/
+
+# Benchmark output; bench/baseline.json is committed
+bench/results.json

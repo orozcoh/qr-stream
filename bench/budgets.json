@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "rationale": "Absolute ceilings, not a same-machine delta. Time ceilings are typically 3-7x the Apple M1 / macOS baseline recorded on 2026-11-16 and rounded up (looser for sub-millisecond and startup metrics), so a slower shared CI runner passes while an algorithmic regression fails. Two entries are deterministic and intentionally tight: render.v40.rgbaKiB guards an exact per-frame allocation, and fountain.stream.symbolsToComplete guards fountain overhead. `min` entries encode a floor where higher is better. Memory entries are coarse runaway guards: the measurement is an approximate retained heap + ArrayBuffer delta and varies between V8 versions. `pnpm bench:compare` is the separate 20% same-machine guardrail.",
+  "metrics": {
+    "writer.json.plain": {
+      "unit": "ms",
+      "max": 40,
+      "note": "baseline ~6.4 ms; gzip + SHA-256 + split of 1 MiB JSON"
+    },
+    "writer.random.plain": {
+      "unit": "ms",
+      "max": 90,
+      "note": "baseline ~21 ms; gzip attempt + SHA-256 + split of 1 MiB incompressible data"
+    },
+    "writer.random.encodeRepair": {
+      "unit": "ms",
+      "max": 2,
+      "note": "baseline ~0.09 ms; sub-millisecond, so the ceiling is deliberately loose"
+    },
+    "writer.json.encrypted": {
+      "unit": "ms",
+      "max": 250,
+      "note": "baseline ~78 ms; dominated by 600k PBKDF2 iterations"
+    },
+    "writer.random.encrypted": {
+      "unit": "ms",
+      "max": 300,
+      "note": "baseline ~93 ms; dominated by 600k PBKDF2 iterations"
+    },
+    "writer.random.plain.heap": {
+      "unit": "MiB",
+      "max": 24,
+      "note": "approximate retained footprint; baseline ~1.8 MiB"
+    },
+    "writer.random.encrypted.heap": {
+      "unit": "MiB",
+      "max": 32,
+      "note": "approximate retained footprint; baseline ~2.0 MiB"
+    },
+    "fountain.stream.decode": {
+      "unit": "ms",
+      "max": 4000,
+      "note": "baseline ~965 ms per 1 MiB lossy stream; 0.77 ms per accepted frame"
+    },
+    "fountain.stream.assemble": {
+      "unit": "ms",
+      "max": 5,
+      "note": "baseline ~0.17 ms; one memcpy into the 1 MiB payload"
+    },
+    "fountain.stream.symbolsToComplete": {
+      "unit": "packets",
+      "max": 1600,
+      "note": "baseline 1254 accepted packets for k=1252 with a quarter of systematic frames dropped"
+    },
+    "render.v20.packetToMatrix": {
+      "unit": "ms",
+      "max": 60,
+      "note": "baseline ~11.7 ms; qrcode-generator mask selection dominates"
+    },
+    "render.v40.packetToMatrix": {
+      "unit": "ms",
+      "max": 180,
+      "note": "baseline ~39.5 ms; qrcode-generator mask selection dominates"
+    },
+    "render.v20.matrixToRGBA": {
+      "unit": "ms",
+      "max": 3,
+      "note": "baseline ~0.12 ms"
+    },
+    "render.v40.matrixToRGBA": {
+      "unit": "ms",
+      "max": 8,
+      "note": "baseline ~0.44 ms"
+    },
+    "render.v20.paintFrame": {
+      "unit": "ms",
+      "max": 60,
+      "note": "baseline ~12.4 ms; fake canvas, so real browser compositing is extra"
+    },
+    "render.v40.paintFrame": {
+      "unit": "ms",
+      "max": 180,
+      "note": "baseline ~40 ms; fake canvas, so real browser compositing is extra"
+    },
+    "render.v20.sustainedFps": {
+      "unit": "fps",
+      "min": 15,
+      "note": "fast preset rate; 15 fps needs a 66.7 ms frame budget"
+    },
+    "render.v40.sustainedFps": {
+      "unit": "fps",
+      "min": 6,
+      "note": "extreme preset rate; 6 fps needs a 166.7 ms frame budget"
+    },
+    "render.v40.rgbaKiB": {
+      "unit": "KiB",
+      "max": 140,
+      "note": "133.69 KiB exact at scale 1; guards accidental buffer growth"
+    },
+    "reader.stream.add": {
+      "unit": "ms",
+      "max": 4000,
+      "note": "baseline ~965 ms for 1254 packets (CRC + plausibility + fountain)"
+    },
+    "reader.stream.reassemble": {
+      "unit": "ms",
+      "max": 4200,
+      "note": "baseline ~972 ms including SHA-256 of 1 MiB"
+    },
+    "reader.frame.add": {
+      "unit": "ms",
+      "max": 4,
+      "note": "baseline ~0.77 ms per accepted frame at 15 fps"
+    },
+    "reader.zxing.startup": {
+      "unit": "ms",
+      "max": 500,
+      "note": "baseline ~10 ms; Node wasm compile with the binary already on disk"
+    },
+    "reader.zxing.720p.v20": {
+      "unit": "ms",
+      "max": 40,
+      "note": "baseline ~5.5 ms per frame; 15 fps allows 66.7 ms"
+    },
+    "reader.zxing.720p.v40": {
+      "unit": "ms",
+      "max": 50,
+      "note": "baseline ~7.1 ms per frame"
+    },
+    "reader.zxing.1080p.v40": {
+      "unit": "ms",
+      "max": 80,
+      "note": "baseline ~14.1 ms per frame; 6 fps allows 166.7 ms"
+    }
+  }
+}

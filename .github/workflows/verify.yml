@@ -62,6 +62,13 @@ jobs:
       - name: Check API report
         run: pnpm api:check
 
+      # One leg only: correctness already runs on both Node versions, and a
+      # second benchmark run doubles CI cost without adding signal. Ceilings
+      # in bench/budgets.json carry headroom for a slower shared runner.
+      - name: Bench budgets
+        if: matrix.node == 22
+        run: pnpm bench:check
+
       - name: Build demo PWA
         run: pnpm demo:build
 

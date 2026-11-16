@@ -72,7 +72,11 @@
     "check:package": "publint && attw --pack . --profile esm-only && knip",
     "api:build": "api-extractor run --local --config api-extractor.json && api-extractor run --local --config api-extractor.browser.json && api-extractor run --local --config api-extractor.qr.json && api-extractor run --local --config api-extractor.react.json && api-extractor run --local --config api-extractor.zxing.json",
     "api:check": "api-extractor run --config api-extractor.json && api-extractor run --config api-extractor.browser.json && api-extractor run --config api-extractor.qr.json && api-extractor run --config api-extractor.react.json && api-extractor run --config api-extractor.zxing.json",
-    "check:size": "size-limit"
+    "check:size": "size-limit",
+    "bench": "node --expose-gc --import tsx bench/run.ts",
+    "bench:baseline": "node --expose-gc --import tsx bench/run.ts --baseline",
+    "bench:check": "node --expose-gc --import tsx bench/run.ts --check",
+    "bench:compare": "node --expose-gc --import tsx bench/run.ts --compare"
   },
   "dependencies": {
     "qrcode-generator": "^2.0.4"
@@ -122,12 +126,15 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "size-limit": "^12.1.0",
+    "tinybench": "^6.2.3",
+    "tsx": "^4.23.15",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.72.2",
     "vite": "^8.3.7",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.0",
-    "wrangler": "^4.160.0"
+    "wrangler": "^4.160.0",
+    "zxing-wasm": "^3.1.6"
   },
   "repository": {
     "type": "git",
