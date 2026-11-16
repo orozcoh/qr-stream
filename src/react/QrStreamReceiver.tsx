@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { FrameDecoder } from '../browser/decoder.js';
+import type { QrStreamError } from '../core/errors.js';
+import type { ReaderLimits } from '../core/types.js';
+import { DownloadControl } from './DownloadControl.js';
+import { ErrorText } from './ErrorText.js';
+import { formatQrString, resolveQrStreamStrings, type QrStreamStrings } from './strings.js';
 import { ensureQrStreamStyles } from './styles.js';
 import { useCameraReader } from './useCameraReader.js';
 import { useQrStreamReader } from './useQrStreamReader.js';
@@ -20,8 +25,14 @@ export interface QrStreamReceiverProps {
   cameraControls?: 'auto' | 'hidden' | 'always';
   /** Offer a save link. On by default: a received file you cannot save is a dead end. */
   download?: boolean;
+  /** Passed through to the reader. */
+  limits?: ReaderLimits;
   onComplete?(data: Uint8Array, filename: string): void;
   className?: string;
+  /** Copy overrides; every visible label is translatable. */
+  strings?: Partial<QrStreamStrings>;
+  /** Host translation for camera and reader errors. Defaults to `error.message`. */
+  formatError?(error: QrStreamError): string;
 }
 
 export function QrStreamReceiver({
@@ -30,11 +41,15 @@ export function QrStreamReceiver({
   decoder,
   cameraControls = 'auto',
   download = true,
+  limits,
   onComplete,
   className,
+  strings,
+  formatError,
 }: QrStreamReceiverProps) {
   const { progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset } = useQrStreamReader({
     ...(passphrase ? { passphrase } : {}),
+    ...(limits ? { limits } : {}),
   });
   const {
     videoRef,
@@ -49,6 +64,9 @@ export function QrStreamReceiver({
     zoom,
     zoomValue,
     setZoom,
+    torchSupported,
+    torch,
+    setTorch,
   } = useCameraReader({
     onSymbol: add,
     createDecoder: decoder,
@@ -57,6 +75,9 @@ export function QrStreamReceiver({
   const [typedKey, setTypedKey] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const completedRef = useRef<Uint8Array | null>(null);
+  const unlockId = useId();
+
+  const text = resolveQrStreamStrings(strings);
 
   const complete = useCallback((data: Uint8Array, filename: string) => onComplete?.(data, filename), [onComplete]);
 
@@ -98,8 +119,8 @@ export function QrStreamReceiver({
       {title ? <h2 className="qrs__title">{title}</h2> : null}
 
       <div className="qrs__feed">
-        <video ref={videoRef} className="qrs__video" playsInline muted />
-        {cameraError ? <span className="qrs__placeholder">Camera unavailable</span> : null}
+        <video ref={videoRef} className="qrs__video" playsInline muted aria-label={text.cameraPreview} />
+        {cameraError ? <span className="qrs__placeholder">{text.cameraUnavailable}</span> : null}
       </div>
 
       {showSwitch ? (
@@ -109,7 +130,18 @@ export function QrStreamReceiver({
           onClick={() => void cycle()}
           disabled={switching}
         >
-          {switching ? 'Switching…' : 'Switch camera'}
+          {switching ? text.switching : text.switchCamera}
+        </button>
+      ) : null}
+
+      {torchSupported ? (
+        <button
+          type="button"
+          className="qrs__button qrs__button--ghost"
+          aria-pressed={torch}
+          onClick={() => void setTorch(!torch)}
+        >
+          {torch ? text.torchOn : text.torchOff}
         </button>
       ) : null}
 
@@ -118,16 +150,25 @@ export function QrStreamReceiver({
           className="qrs__progress"
           value={progress.solved}
           max={Math.max(1, progress.k)}
-          aria-valuetext={`${progress.solved} of ${progress.k} blocks, ${percent} percent`}
+          aria-valuetext={formatQrString(text.progressAria, {
+            solved: progress.solved,
+            k: progress.k,
+            percent,
+          })}
         />
         <p className="qrs__meta">
-          {progress.solved} / {progress.k} blocks · {percent}% · {solveRate} frames/s
+          {formatQrString(text.progress, {
+            solved: progress.solved,
+            k: progress.k,
+            percent,
+            rate: solveRate,
+          })}
         </p>
       </div>
 
       {showCameraPicker ? (
         <label className="qrs__field">
-          <span className="qrs__label">Camera</span>
+          <span className="qrs__label">{text.camera}</span>
           <select className="qrs__select" value={activeId ?? ''} onChange={(event) => void select(event.target.value)}>
             {devices.map((device) => (
               <option key={device.deviceId} value={device.deviceId}>
@@ -140,7 +181,7 @@ export function QrStreamReceiver({
 
       {zoom ? (
         <label className="qrs__field">
-          <span className="qrs__label">Zoom — {zoomValue.toFixed(1)}×</span>
+          <span className="qrs__label">{formatQrString(text.zoom, { value: zoomValue.toFixed(1) })}</span>
           <input
             className="qrs__range"
             type="range"
@@ -156,27 +197,35 @@ export function QrStreamReceiver({
       {stale ? (
         <div className="qrs__settings">
           <p className="qrs__error" role="alert">
-            A different transfer is being sent. This one cannot finish from it.
+            {text.stale}
           </p>
           <button type="button" className="qrs__button" onClick={() => reset()}>
-            Switch to the new transfer
+            {text.switchToNew}
           </button>
         </div>
       ) : null}
 
       {wrongKey ? (
         <div className="qrs__settings">
-          <input
-            className="qrs__input"
-            type="password"
-            value={typedKey}
-            autoComplete="off"
-            aria-label="Passphrase"
-            onChange={(event) => setTypedKey(event.target.value)}
-            placeholder="passphrase"
-          />
+          <p className="qrs__error" role="alert">
+            {text.wrongKey}
+          </p>
+          <div className="qrs__field">
+            <label className="qrs__label" htmlFor={unlockId}>
+              {text.passphraseLabel}
+            </label>
+            <input
+              id={unlockId}
+              className="qrs__input"
+              type="password"
+              value={typedKey}
+              autoComplete="off"
+              onChange={(event) => setTypedKey(event.target.value)}
+              placeholder={text.passphraseInput}
+            />
+          </div>
           <button type="button" className="qrs__button qrs__button--primary" onClick={() => void retryKey(typedKey)}>
-            Unlock
+            {text.unlock}
           </button>
         </div>
       ) : null}
@@ -184,30 +233,27 @@ export function QrStreamReceiver({
       {result ? (
         <div className="qrs__settings">
           <p className="qrs__meta" role="status">
-            {result.meta.filename} — SHA-256 verified
+            {formatQrString(text.verified, { filename: result.meta.filename })}
           </p>
           {downloadUrl ? (
-            <a href={downloadUrl} download={result.meta.filename}>
-              <button type="button" className="qrs__button qrs__button--primary">
-                Save file
-              </button>
-            </a>
+            <DownloadControl url={downloadUrl} filename={result.meta.filename} label={text.saveFile} />
           ) : null}
           <button type="button" className="qrs__button" onClick={() => reset()}>
-            Receive another
+            {text.receiveAnother}
           </button>
         </div>
       ) : null}
 
       <details className="qrs__details">
-        <summary className="qrs__summary">Cameras reported by this browser ({devices.length})</summary>
+        <summary className="qrs__summary">{formatQrString(text.diagnostics, { count: devices.length })}</summary>
         <table className="qrs__table">
+          <caption className="qrs__sr-only">{formatQrString(text.diagnostics, { count: devices.length })}</caption>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Label</th>
-              <th>Facing</th>
-              <th>Group</th>
+              <th>{text.tableNumber}</th>
+              <th>{text.tableLabel}</th>
+              <th>{text.tableFacing}</th>
+              <th>{text.tableGroup}</th>
             </tr>
           </thead>
           <tbody>
@@ -224,37 +270,29 @@ export function QrStreamReceiver({
 
         {diagnostics?.active ? (
           <p>
-            Active: {diagnostics.active.label || 'unnamed'} ·{' '}
-            {`${diagnostics.active.settings.width}×${diagnostics.active.settings.height}`} @{' '}
-            {Math.round(diagnostics.active.settings.frameRate ?? 0)} fps · focus{' '}
-            {String(diagnostics.active.capabilities.focusMode ?? 'n/a')}
+            {formatQrString(text.activeCamera, {
+              label: diagnostics.active.label || text.unnamed,
+              width: diagnostics.active.settings.width ?? 0,
+              height: diagnostics.active.settings.height ?? 0,
+              fps: Math.round(diagnostics.active.settings.frameRate ?? 0),
+              focus: String(diagnostics.active.capabilities.focusMode ?? 'n/a'),
+            })}
           </p>
         ) : null}
 
-        <p style={{ marginBottom: 8 }}>
-          Some Android builds only list secondary rear cameras after the stream has been opened once. If your phone has
-          more than the browser lists, that is a browser limit.
-        </p>
+        <p style={{ marginBottom: 8 }}>{text.diagnosticsHint}</p>
         <button
           type="button"
           className="qrs__button qrs__button--ghost"
           onClick={() => void rescan()}
           disabled={switching}
         >
-          {switching ? 'Scanning…' : 'Rescan cameras'}
+          {switching ? text.scanning : text.rescan}
         </button>
       </details>
 
-      {cameraError ? (
-        <p className="qrs__error" role="alert">
-          {cameraError.message}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="qrs__error" role="alert">
-          {error.message}
-        </p>
-      ) : null}
+      <ErrorText error={cameraError} {...(formatError ? { formatError } : {})} />
+      <ErrorText error={wrongKey ? null : error} {...(formatError ? { formatError } : {})} />
     </div>
   );
 }

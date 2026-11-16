@@ -25,11 +25,16 @@ export function matchesAccept(file: File, accept: string | undefined): boolean {
   });
 }
 
-/** Human-readable form of an `accept` value, for helper text. */
-export function describeAccept(accept: string): string {
+/**
+ * Human-readable form of an `accept` value, for helper text.
+ *
+ * Only the restriction list is returned: the surrounding `accepts` string is a
+ * template, so the label that introduces it stays translatable.
+ */
+export function describeAcceptTypes(accept: string): string {
   const parts = accept
     .split(',')
     .map((rule) => rule.trim())
     .filter((rule) => rule.length > 0);
-  return `Accepts ${parts.join(', ')}`;
+  return parts.join(', ');
 }

@@ -1,14 +1,33 @@
+import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
-import { describeAccept, matchesAccept } from '../src/react/file-accept';
+import { QrStreamError } from '../src/core/errors';
+import { DownloadControl } from '../src/react/DownloadControl';
+import { ErrorText } from '../src/react/ErrorText';
+import { describeAcceptTypes, matchesAccept } from '../src/react/file-accept';
 import { QrStreamReceiver } from '../src/react/QrStreamReceiver';
 import { QrStreamSender } from '../src/react/QrStreamSender';
+import {
+  DEFAULT_QR_STREAM_STRINGS,
+  formatQrString,
+  resolveQrStreamStrings,
+  type QrStreamStrings,
+} from '../src/react/strings';
 
 const fakeFile = (name: string, type: string): File => ({ name, type, size: 10 }) as unknown as File;
 
 /** SSR never runs effects, so this factory is only here to satisfy the type. */
 const stubDecoder = async () => ({ decode: async () => null });
+
+/** A value that cannot be mistaken for any default copy. */
+const sentinel = (index: number): string => `⟦${index}⟧`;
+
+function sentinelStrings(): QrStreamStrings {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_QR_STREAM_STRINGS).map((key, index) => [key, sentinel(index)]),
+  ) as unknown as QrStreamStrings;
+}
 
 describe('QrStreamSender', () => {
   test('renders the default title', () => {
@@ -41,7 +60,7 @@ describe('QrStreamSender', () => {
   test('reflects an accept restriction on the picker and in the label', () => {
     const html = renderToStaticMarkup(createElement(QrStreamSender, { accept: '.json' }));
     expect(html).toContain('accept=".json"');
-    expect(html).toContain('Accepts .json');
+    expect(html).toContain('— .json');
   });
 
   test('hides the speed control before a stream is running', () => {
@@ -55,6 +74,39 @@ describe('QrStreamSender', () => {
     const button = html.indexOf('Start stream');
     expect(button).toBeGreaterThan(-1);
     expect(html.indexOf('qrs__settings')).toBeGreaterThan(button);
+  });
+
+  test('custom strings replace the sender labels and drop the defaults', () => {
+    const html = renderToStaticMarkup(
+      createElement(QrStreamSender, {
+        strings: { start: 'Enviar', stop: 'Detener', chooseFile: 'Elige un archivo', file: 'Archivo' },
+      }),
+    );
+    expect(html).toContain('Enviar');
+    expect(html).toContain('Elige un archivo');
+    expect(html).toContain('Archivo');
+    expect(html).not.toContain('Start stream');
+    expect(html).not.toContain('Choose a file to begin');
+  });
+
+  test('density options interpolate the name and version', () => {
+    const html = renderToStaticMarkup(
+      createElement(QrStreamSender, { strings: { densityOption: '{name} / v{version}' } }),
+    );
+    expect(html).toContain('fast / v20');
+    expect(html).not.toContain('fast — v20');
+  });
+
+  test('the canvas is an image with an accessible name', () => {
+    const html = renderToStaticMarkup(createElement(QrStreamSender, { strings: { qrCode: 'Código QR' } }));
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="Código QR"');
+  });
+
+  test('the passphrase input has a visible label tied to it', () => {
+    const html = renderToStaticMarkup(createElement(QrStreamSender, {}));
+    expect(html).toMatch(/<label[^>]*for="[^"]+"[^>]*>Passphrase <span class="qrs__hint">— optional<\/span><\/label>/);
+    expect(html).toMatch(/<input[^>]*id="[^"]+"/);
   });
 });
 
@@ -83,6 +135,7 @@ describe('QrStreamReceiver', () => {
     expect(html).toContain('<progress');
     expect(html).toContain('0 / 0 blocks');
     expect(html).toContain('aria-valuetext');
+    expect(html).toContain('0 of 0 blocks, 0 percent');
   });
 
   test('hides camera controls until the browser reports a choice', () => {
@@ -96,6 +149,117 @@ describe('QrStreamReceiver', () => {
       createElement(QrStreamReceiver, { decoder: stubDecoder, cameraControls: 'hidden' }),
     );
     expect(html).not.toContain('Switch camera');
+  });
+
+  test('custom strings replace the receiver labels', () => {
+    const html = renderToStaticMarkup(
+      createElement(QrStreamReceiver, {
+        decoder: stubDecoder,
+        strings: { progress: '{solved}/{k} bloques', progressAria: '{solved} de {k} bloques', cameraPreview: 'Vista' },
+      }),
+    );
+    expect(html).toContain('0/0 bloques');
+    expect(html).toContain('0 de 0 bloques');
+    expect(html).toContain('aria-label="Vista"');
+    expect(html).not.toContain('0 / 0 blocks');
+    expect(html).not.toContain('Camera preview');
+  });
+
+  test('the video has an accessible name', () => {
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+    expect(html).toContain('aria-label="Camera preview"');
+  });
+
+  test('the diagnostics table has a caption and translated headers', () => {
+    const html = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder }));
+    expect(html).toContain('<caption');
+    expect(html).toContain('Cameras reported by this browser (0)');
+    expect(html).toContain('<th>Label</th>');
+  });
+});
+
+describe('ErrorText', () => {
+  test('formats a coded error and announces it', () => {
+    const html = renderToStaticMarkup(
+      createElement(ErrorText, {
+        error: new QrStreamError('INVALID_PACKET', 'bad frame'),
+        formatError: (error) => `code:${error.code}`,
+      }),
+    );
+    expect(html).toContain('code:INVALID_PACKET');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('qrs__error');
+  });
+
+  test('falls back to the error message', () => {
+    const html = renderToStaticMarkup(
+      createElement(ErrorText, { error: new QrStreamError('INVALID_PACKET', 'bad frame') }),
+    );
+    expect(html).toContain('bad frame');
+  });
+
+  test('renders nothing without an error', () => {
+    expect(renderToStaticMarkup(createElement(ErrorText, { error: null }))).toBe('');
+  });
+});
+
+describe('DownloadControl', () => {
+  test('is a single anchor, not an anchor wrapping a button', () => {
+    const html = renderToStaticMarkup(
+      createElement(DownloadControl, { url: 'blob:test', filename: 'a.json', label: 'Save file' }),
+    );
+    expect(html).toContain('<a');
+    expect(html).toContain('href="blob:test"');
+    expect(html).toContain('download="a.json"');
+    expect(html).toContain('qrs__button qrs__button--primary');
+    expect(html).not.toContain('<button');
+  });
+});
+
+describe('strings', () => {
+  test('formats numbers and strings', () => {
+    expect(formatQrString('{solved}/{k} blocks', { solved: 3, k: 10 })).toBe('3/10 blocks');
+  });
+
+  test('treats replacement patterns in a value as literal text', () => {
+    expect(formatQrString('{name}', { name: '$& $1 $$ $`' })).toBe('$& $1 $$ $`');
+  });
+
+  test('leaves unknown placeholders intact', () => {
+    expect(formatQrString('{known} {missing}', { known: 'x' })).toBe('x {missing}');
+  });
+
+  test('the speed template keeps its "Speed —" prefix', () => {
+    expect(formatQrString(DEFAULT_QR_STREAM_STRINGS.speed, { fps: 12, estimate: '~34 s' })).toBe(
+      'Speed — 12 fps · ~34 s to receive',
+    );
+  });
+
+  test('treats an undefined override as absent', () => {
+    expect(resolveQrStreamStrings({ start: undefined, stop: 'Detener' })).toMatchObject({
+      start: 'Start stream',
+      stop: 'Detener',
+    });
+  });
+
+  test('every string key is wired into a packaged component', () => {
+    const sources = ['../src/react/QrStreamSender.tsx', '../src/react/QrStreamReceiver.tsx']
+      .map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+      .join('\n');
+    for (const key of Object.keys(DEFAULT_QR_STREAM_STRINGS)) {
+      expect(sources, `unused string key: ${key}`).toContain(`text.${key}`);
+    }
+  });
+
+  test('a sentinel value for every key leaves no default English in either component', () => {
+    const strings = sentinelStrings();
+    const sender = renderToStaticMarkup(createElement(QrStreamSender, { strings, accept: '.json' }));
+    const receiver = renderToStaticMarkup(createElement(QrStreamReceiver, { decoder: stubDecoder, strings }));
+
+    for (const [key, value] of Object.entries(DEFAULT_QR_STREAM_STRINGS)) {
+      expect(sender, `sender still renders ${key}`).not.toContain(value);
+      expect(receiver, `receiver still renders ${key}`).not.toContain(value);
+    }
   });
 });
 
@@ -129,9 +293,9 @@ describe('matchesAccept', () => {
   });
 });
 
-describe('describeAccept', () => {
-  test('renders the restriction for helper text', () => {
-    expect(describeAccept('.json')).toBe('Accepts .json');
-    expect(describeAccept('.json, .csv')).toBe('Accepts .json, .csv');
+describe('describeAcceptTypes', () => {
+  test('renders the restriction list for helper text', () => {
+    expect(describeAcceptTypes('.json')).toBe('.json');
+    expect(describeAcceptTypes('.json, .csv')).toBe('.json, .csv');
   });
 });
