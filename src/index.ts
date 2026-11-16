@@ -1,18 +1,33 @@
-export * from './core/types';
-export { crc32 } from './core/crc32';
-export { encodePacket, decodePacket, MAGIC, FLAG_GZIP, FLAG_ENCRYPTED, type Packet } from './core/packet';
-export { splitmix32, symbolIndices } from './core/prng';
-export { encodeSymbol, FountainDecoder } from './core/fountain';
-export { gzipIfSmaller, gunzip } from './core/compress';
-export { WrongKeyError, encryptBytes, decryptBytes, DEFAULT_ITERATIONS } from './core/crypto';
-export { encodeMeta, decodeMeta, readVarint, writeVarint, type StreamMeta } from './core/meta';
 export {
-  createQrStreamWriter,
-  type WriterOptions,
-  type QrStreamWriter,
-} from './core/writer';
+  MAX_DECODED_BYTES,
+  MAX_INPUT_BYTES,
+  MAX_WIRE_BYTES,
+  PRESETS,
+  type Preset,
+  type PresetName,
+  type ReaderLimits,
+  type TransferLimits,
+} from './core/types.js';
+export {
+  CameraError,
+  DecoderError,
+  PayloadTooLargeError,
+  QrStreamError,
+  RenderError,
+  WrongKeyError,
+  isQrStreamError,
+  type CameraErrorCode,
+  type PayloadScope,
+  type QrStreamErrorCode,
+  type QrStreamErrorOptions,
+  type QrStreamRecovery,
+} from './core/errors.js';
+export { gzipIfSmaller, gunzip } from './core/compress.js';
+export type { StreamMeta } from './core/meta.js';
+export { createQrStreamWriter, type WriterOptions, type QrStreamWriter } from './core/writer.js';
 export {
   createQrStreamReader,
   type QrStreamReader,
+  type QrStreamReaderOptions,
   type AddResult,
-} from './core/reader';
+} from './core/reader.js';

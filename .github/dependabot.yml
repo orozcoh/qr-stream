@@ -1,0 +1,45 @@
+version: 2
+
+updates:
+  # One entry covers the pnpm workspace (root plus tests/react18-runtime);
+  # Dependabot reads pnpm-workspace.yaml for the package set.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    groups:
+      # Routine bumps travel together so verify runs once, not once per package.
+      dev-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+      # Production deps are one package plus optional peers: keep them visible.
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+    # Majors stay ungrouped on purpose: each one needs its own review and its
+    # own verify run. pnpm-lock.yaml is the gate, so never auto-merge.
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:15'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 3
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: chore(ci)
+      include: scope
+    groups:
+      actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { createQrStreamReader } from '../src/core/reader';
+import { MAX_WIRE_BYTES } from '../src/core/types';
 import { createQrStreamWriter } from '../src/core/writer';
 
 function lcg(seed: number): () => number {
@@ -104,6 +105,10 @@ describe('core end to end', () => {
 
     const writer = await createQrStreamWriter(payload, { filename: 'big.json', preset: 'extreme' });
     expect(writer.k).toBeGreaterThan(300);
+    // A 1 MiB incompressible body is exactly at the wire cap; the metadata and
+    // GCM tag live in the stream padding, not the wire budget.
+    expect(writer.wireBytes).toBeLessThanOrEqual(MAX_WIRE_BYTES);
+    expect(writer.meta.wireLen).toBe(writer.wireBytes);
 
     const reader = createQrStreamReader();
     const drop = lcg(7);

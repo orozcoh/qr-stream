@@ -8,11 +8,29 @@ This is a library plus a demo PWA. The codec is DOM-free and runs in Node, so
 the reliability claims below are proven by tests rather than by hoping.
 
 - [Why it works](#why-it-works)
+- [30-second sender](#30-second-sender)
 - [Install the demo](#install-the-demo)
+- [Install](#install)
+- [Entry points](#entry-points)
+- [Browser support](#browser-support)
 - [Library API](#library-api)
 - [React API](#react-api)
-- [Offline requirements](#offline-requirements)
+- [Errors and recovery](#errors-and-recovery)
+- [Offline checklist](#offline-checklist)
+- [Presets](#presets)
+- [Limits](#limits)
+- [API reference](https://orozcoh.github.io/qr-stream/)
+- [Examples](examples/)
+- [Integration guide](docs/integration.md)
+- [Migration from 0.2](docs/migration-0.2-to-1.0.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Threat model](docs/threat-model.md)
+- [Performance](docs/performance.md)
 - [Wire format](docs/wire-format.md)
+- [Security policy](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Support](SUPPORT.md)
+- [Release guide](docs/release.md)
 
 ## Why it works
 
@@ -31,8 +49,56 @@ Consequences worth knowing:
   sender, because both people are standing next to each other.
 - Failing to finish is not a failure state — it means "keep pointing".
 
-Payload limits: JSON only, **1 MiB**. Typical JSON compresses 3–8×, so the
-common case transfers in a few seconds.
+Payload limits are split by what they bound: up to **8 MiB of raw input**,
+**1 MiB on the compressed wire**, and **8 MiB decoded** on the receiving side.
+Typical JSON compresses 3–8×, so the common case transfers in a few seconds.
+
+## 30-second sender
+
+```bash
+npm install @orozcoh/qr-stream
+```
+
+```ts
+import { createQrStreamWriter } from '@orozcoh/qr-stream';
+import { renderQrStream } from '@orozcoh/qr-stream/browser';
+
+const canvas = document.querySelector('canvas')!;
+const file = document.querySelector<HTMLInputElement>('input[type=file]')!.files![0]!;
+
+const writer = await createQrStreamWriter(new Uint8Array(await file.arrayBuffer()), {
+  filename: file.name,
+  preset: 'balanced', // 'fast' | 'balanced' | 'dense' | 'extreme'
+});
+
+const controller = renderQrStream({ writer, canvas });
+controller.play();
+// controller.stop() clears the last frame and releases the iterator.
+```
+
+Give the canvas a fixed-size parent; the renderer snaps to an integer module
+scale and does not want a CSS width fighting it. The receiver needs a browser,
+a camera, and the optional decoder:
+
+```ts
+import { createQrStreamReader } from '@orozcoh/qr-stream';
+import { readQrStream } from '@orozcoh/qr-stream/browser';
+import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
+import wasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
+
+const reader = createQrStreamReader();
+const decode = await createZXingDecoder({ wasmUrl });
+const camera = await readQrStream({ video, decode });
+
+camera.onSymbol((bytes) => reader.add(bytes));
+
+// After every block has arrived:
+const result = await reader.result(); // { data, meta } | null
+```
+
+Run the three working examples locally with `pnpm examples:build`, or read
+[`examples/`](examples/) for the minimal sender, minimal receiver, and React
+hooks pages.
 
 ## Install the demo
 
@@ -54,11 +120,63 @@ two devices are allowed to be offline.
 npm install @orozcoh/qr-stream
 ```
 
-The codec entry has no dependencies. The React entry needs React 19, and the
-decoder needs `zxing-wasm` (see [Decoders](#decoders)). Neither is installed for
-you, so a project that only encodes ships neither.
+The codec entry has no dependencies. The React entry needs React 18 or newer,
+and the decoder needs `zxing-wasm` (see [Decoders](#decoders)). Neither is
+installed for you, so a project that only encodes ships neither.
+
+## Entry points
+
+| Import | What it gives you | DOM |
+| --- | --- | --- |
+| `@orozcoh/qr-stream` | Writer, reader, packet codec, crypto, errors, limits. | No |
+| `@orozcoh/qr-stream/browser` | `renderQrStream`, `readQrStream`, camera controller. | Yes |
+| `@orozcoh/qr-stream/qr` | `packetToMatrix`, `qrCapacity`, `matrixToRGBA`. | No canvas |
+| `@orozcoh/qr-stream/react` | `QrStreamSender`, `QrStreamReceiver`, hooks, `ErrorText`, strings. | Yes |
+| `@orozcoh/qr-stream/browser/zxing` | `createZXingDecoder`, the optional decoder. | Yes |
+
+The root entry is DOM-free and runs in Node 20+. Only `/browser/zxing` imports
+`zxing-wasm`, so a sender-only bundle never ships the decoder. See the
+[integration guide](docs/integration.md#1-choose-an-entry-point) for choosing
+between the packaged components, the hooks, and the headless controller.
+
+## Browser support
+
+| Platform | Supported |
+| --- | --- |
+| Desktop Chrome, Edge, Firefox, Safari | Current evergreen releases. |
+| iOS Safari | 16.4 and newer. |
+| Chrome Android | 120 and newer. |
+| Node.js | 20 and newer for the core and `/qr` entries (no DOM). |
+
+The core needs `CompressionStream`, `DecompressionStream`, and `crypto.subtle`.
+A missing capability fails with `UNSUPPORTED_RUNTIME` and recovery
+`upgrade-browser`, never a raw DOM exception. The camera path additionally needs
+a secure context (HTTPS or `localhost`). `BarcodeDetector` is not a supported
+decoder: it returns text, and a packet is binary. See [Decoders](#decoders).
 
 ## Version compatibility
+
+| Version | Status | React peer | Wire compatibility |
+| --- | --- | --- | --- |
+| `1.0.0-rc.1` | Pre-release (publish pending to `next`; not `latest`) | `>=18` | Same wire format as `0.2.0`; plaintext ≤1 MiB interops both ways. |
+| `0.2.0` | Registry `latest` until `1.0.0` ships | `>=19` | Reads 1.0 plaintext ≤1 MiB; encrypted streams are not readable by `0.1.x`. |
+
+`1.0.0-rc.1` is a release candidate, not the final release. It **will be
+published** under the `next` dist-tag; publication is pending, and
+`npm install @orozcoh/qr-stream` still resolves `latest` to `0.2.0` until
+`1.0.0` is published. The draft notes are the
+[`1.0.0-rc.1` changelog section](CHANGELOG.md#100-rc1--2026-11-16), and the
+release procedure is in [docs/release.md](docs/release.md). The intermediate
+internal milestones never reached npm.
+
+`1.0.0-rc.1` keeps the same wire format and moves the payload budgets to the
+raw/wire/decoded split described in [Limits](#limits). An RC stream is readable
+by a `0.2.0` receiver when the plaintext is at most 1 MiB — for encrypted and
+unencrypted transfers alike. The encryption format did not change, but 0.2's
+1 MiB plaintext cap still applies to any encrypted stream it receives. Set
+`limits: { maxInputBytes: 1024 * 1024 }` on the sender if every transfer must
+stay readable by an older device. See
+[Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility).
 
 `0.2.0` authenticates the metadata block of an encrypted transfer with AES-GCM
 additional authenticated data. A `0.2.0` receiver cannot decrypt a `0.1.x`
@@ -77,12 +195,12 @@ const writer = await createQrStreamWriter(bytes, {
   passphrase: 'optional',      // omit for a clear transfer
 });
 
-writer.k;          // number of source blocks
-writer.blockSize;  // bytes per frame
-
-for await (const packet of writer.packets()) {
-  // packet: Uint8Array — render it with packetToMatrix below
-}
+writer.k;            // number of source blocks
+writer.blockSize;    // bytes per frame
+writer.version;      // QR version the preset encoded into every packet
+writer.wireBytes;    // compressed body before encryption; equals meta.wireLen
+writer.payloadBytes; // varint + metadata + wire body (and GCM tag when encrypted)
+writer.packets();    // infinite async generator of packet bytes (low-level use)
 ```
 
 ```ts
@@ -106,6 +224,11 @@ Rendering and capture live behind their own entry points:
 import { packetToMatrix, matrixToRGBA, qrCapacity } from '@orozcoh/qr-stream/qr';
 import { renderQrStream, readQrStream, quantizeFps } from '@orozcoh/qr-stream/browser';
 import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
+
+const canvas = document.querySelector('canvas')!;
+const controller = renderQrStream({ writer, canvas });
+controller.play();
+// controller.stop() clears the last frame and releases the iterator
 ```
 
 ## React API
@@ -113,17 +236,31 @@ import { createZXingDecoder } from '@orozcoh/qr-stream/browser/zxing';
 ```tsx
 import { QrStreamSender, QrStreamReceiver } from '@orozcoh/qr-stream/react';
 
+// The hook calls this factory each time it opens the camera; defining it once
+// keeps the option stable instead of allocating a new function per render.
+const createDecoder = () => createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' });
+
 <QrStreamSender
-  title="Share a file"        // heading, default "qr-stream"
-  accept=".json"              // optional; omitted accepts any file
-  maxBytes={512 * 1024}       // optional tighter cap
+  title="Share a file"                     // heading, default "qr-stream"
+  accept=".json"                           // optional; omitted accepts any file
+  maxBytes={512 * 1024}                    // optional tighter cap
+  limits={{ maxInputBytes: 1024 * 1024 }}  // optional tighter budget
+  strings={{ start: 'Start' }}             // any label is translatable
+  formatError={(error) => t(`error.${error.code}`)}
 />
 
 <QrStreamReceiver
-  decoder={() => createZXingDecoder({ wasmUrl: '/assets/zxing_reader.wasm' })}
+  decoder={createDecoder}
+  formatError={(error) => t(`error.${error.code}`)}
   onComplete={(data, filename) => save(data, filename)}
 />
 ```
+
+Every visible label comes from `strings` (`Partial<QrStreamStrings>`, defaults in
+`DEFAULT_QR_STREAM_STRINGS`) and uses `{placeholder}` templates, so one prop
+translates the whole component. `formatError` receives the typed error, so a
+host maps `error.code` to a translated sentence instead of matching on English
+messages.
 
 Both components are self-contained: they paint their own background, centre
 themselves, and carry no page-level assumptions, so dropping one into a modal
@@ -147,10 +284,56 @@ focus close enough to scan — that button is the fix.
 Hooks, when you want your own layout:
 
 ```ts
-useQrStreamWriter({ data, filename, preset, passphrase }) // { writer, error }
-useQrStreamReader({ passphrase })                        // { progress, solveRate, result, wrongKey, add, retryKey, reset }
-useCameraReader({ deviceId, onSymbol, createDecoder })   // { videoRef, devices, activeId, select, cycle, switching, error }
+useQrStreamWriter({ data, filename, preset, passphrase, limits }) // { writer, error, pending }
+useQrStreamReader({ passphrase, limits })                         // { progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset }
+useCameraReader({ deviceId, onSymbol, createDecoder, enabled })   // { videoRef, devices, start, stop, error, torch, ... }
 ```
+
+All three report failures as a typed `QrStreamError | null`; branch on
+`error.code` and `error.recovery` rather than matching a message. `enabled`
+defaults to `true` and closes the camera when it turns `false`, while manual
+`start()`/`stop()` let a host drive the lifecycle itself. `useCameraReader` also
+exposes `torchSupported`, `torch`, and `setTorch(on)`.
+
+`videoRef` is typed as `QrVideoRef`, a plain `{ current: HTMLVideoElement | null }`
+that is assignable to both React 18 and React 19 refs without a cast.
+
+## Errors and recovery
+
+Every branchable failure is a `QrStreamError` with a stable `code` and a
+`recovery` hint. Messages are human-readable and may change; branch on the code,
+not the English. `isQrStreamError(value)` narrows an unknown caught value.
+
+| Situation | Code | Recovery |
+| --- | --- | --- |
+| Raw file over the input budget | `INPUT_TOO_LARGE` | `change-input` |
+| Compressed body over the wire budget | `WIRE_TOO_LARGE` | `change-input` |
+| Decompressed result over the reader budget | `DECODED_TOO_LARGE` | `none` |
+| Camera permission refused | `CAMERA_PERMISSION_DENIED` | `grant-permission` |
+| No camera / camera busy / constraints refused | `CAMERA_NOT_FOUND`, `CAMERA_IN_USE`, `CAMERA_CONSTRAINTS_FAILED` | `change-camera` |
+| Decoder failed to load or read frames | `DECODER_FAILED` | `retry` |
+| Missing `CompressionStream` or Web Crypto | `UNSUPPORTED_RUNTIME` | `upgrade-browser` |
+| Wrong passphrase | `WRONG_PASSPHRASE` | `retry-passphrase` |
+
+A wrong passphrase is a retry, not a rescan: the reader keeps the assembled
+ciphertext, and `useQrStreamReader` exposes `wrongKey`/`retryKey(next)`.
+`QrStreamReceiver` renders the unlock flow for you.
+
+```ts
+import { isQrStreamError } from '@orozcoh/qr-stream';
+
+try {
+  await something();
+} catch (cause) {
+  if (isQrStreamError(cause)) report(cause.code, cause.recovery);
+  else throw cause;
+}
+```
+
+`formatError(error)` maps the typed error to a translated sentence. The full
+code catalog is in the
+[integration guide](docs/integration.md#6-error-handling); symptom-by-symptom
+fixes are in [troubleshooting](docs/troubleshooting.md).
 
 ## Decoders
 
@@ -167,6 +350,10 @@ await readQrStream({ video, decode });
 (or only uses the sender) never installs it. `@orozcoh/qr-stream/browser` itself imports
 no QR library; only `@orozcoh/qr-stream/browser/zxing` does. If you forget to install the
 peer, the bundler fails at build time naming the package.
+
+`wasmUrl` is required, and there is no CDN fallback: the decoder loads from the
+asset you name or the transfer does not work. That is what makes the offline
+PWA honest — see the [integration guide](docs/integration.md#4-offline-pwa-checklist).
 
 `createZXingDecoder` is the only decoder provided. That is a deliberate
 decision, and the interface above is what keeps it a decision rather than a
@@ -193,16 +380,35 @@ byte-perfect through the same pipeline, so the detector works; it just cannot
 carry our format. A text-safe encoding would fix it at roughly 33% of the QR
 capacity, which is not a trade worth making silently.
 
-## Offline requirements
+## Offline checklist
 
-Two things bite exactly once, in the room, when you cannot debug them:
+The failure this prevents is specific: the app loads from cache, the decoder
+cannot load the WASM, and `start()` records `DECODER_FAILED` **before the camera
+opens**. Work through this once, in the room, before the airgap.
 
-1. **`getUserMedia` needs a secure context.** Load the app once over HTTPS (or
-   `localhost`) and install it before you airgap the devices.
-2. **The WASM decoder must be precached.** `vite-plugin-pwa` will not include a
-   `.wasm` that came from `node_modules` unless you add `**/*.wasm` to
-   `workbox.globPatterns`. `demo/vite.config.ts` does this; verify it by
-   searching the built `sw.js` for `zxing_reader`.
+- [ ] **Serve a secure context.** `getUserMedia` needs HTTPS or
+      `localhost`/`127.0.0.1`. Load the app once online and install it before the
+      devices go offline.
+- [ ] **Emit the WASM on your own origin.** Import
+      `zxing-wasm/reader/zxing_reader.wasm?url` and pass that URL to
+      `createZXingDecoder({ wasmUrl })`. There is no CDN fallback.
+- [ ] **Precache it.** `vite-plugin-pwa` will not include a `.wasm` from
+      `node_modules` unless `workbox.globPatterns` includes `**/*.wasm`; the
+      asset must also fit `workbox.maximumFileSizeToCacheInBytes`.
+- [ ] **Allow WASM compilation in CSP.** Add `script-src 'self'
+      'wasm-unsafe-eval'` (not the broader `'unsafe-eval'`) and keep
+      `Permissions-Policy: camera=(self)`.
+- [ ] **Verify the built service worker.** `grep -o 'zxing_reader[^"]*'
+      dist/sw.js` must show the hashed asset. An empty result means the glob is
+      wrong and the receiver will fail offline.
+- [ ] **Test with networking off.** Relaunch from the home screen in airplane
+      mode (not just Wi-Fi off) and complete a transfer. This is the only check
+      that proves the asset was precached.
+
+The full snippets and the two-device test script are in the
+[integration guide](docs/integration.md#4-offline-pwa-checklist). If something
+fails, start with
+[troubleshooting](docs/troubleshooting.md#decoder_failed-or-offline-wasm).
 
 ## Presets
 
@@ -221,19 +427,33 @@ The demo quantises the requested frame rate to a divisor of the display refresh
 rate, because a code shown for a non-integer number of refreshes gets captured
 mid-switch as blur.
 
+## Performance
+
+Measured numbers, method, and caveats live in
+[docs/performance.md](docs/performance.md). In short: preparing a payload is a
+one-time cost dominated by compression and hashing (plus PBKDF2 when
+encrypting), painting is dominated by QR matrix encoding rather than RGBA
+expansion, and camera decode is not the bottleneck at the supported presets on
+the reference machine. CI enforces absolute ceilings for the writer, fountain,
+renderer, reader, and decoder, with a tighter local 20% guardrail; bundle sizes
+are gated separately by `pnpm check:size`. Those are budgets, not promises for
+every phone or runner.
+
 ## Runtime requirements
 
 The core needs `CompressionStream` and `crypto.subtle`; Node 20+ or any
-current browser. The React entry needs React 19. The decoder needs
+current browser. The React entry needs React 18 or newer. The decoder needs
 `zxing-wasm`, installed separately.
 
 ## Testing
 
 ```bash
-pnpm test          # 153 tests, DOM-free
+pnpm test          # DOM-free suite
 pnpm typecheck
 pnpm build
 pnpm demo:build
+pnpm examples:build
+pnpm docs:build
 ```
 
 The highest-value test is `tests/loopback.test.ts`: it rasterises real packets
@@ -310,14 +530,33 @@ devices work with no network at all.
 
 ## Release
 
-Two phases, both behind an auth preflight (`gh` must be the repo owner and
-`npm whoami` must succeed):
+Release candidates publish to the `next` dist-tag, never `latest`. Every step
+is behind an auth preflight (`gh` must be the repo owner and `npm whoami` must
+succeed):
 
 ```bash
 pnpm release:check   # read-only: auth, branch, sync, version, tag, npm, release
-pnpm release:prepare 0.3.0   # bump, changelog check, tests, PR, verify, merge
-pnpm release:publish         # tag, npm publish, GitHub release, smoke test
+
+# RC path: the signed provenance workflow, with the `next` dist-tag.
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=true
+gh run watch --repo orozcoh/qr-stream
+# green dry run, then the real upload:
+gh workflow run publish.yml --repo orozcoh/qr-stream --ref main \
+  -f version=1.0.0-rc.1 -f dist_tag=next -f dry_run=false
+
+# The CI job publishes only; finish the tag, GitHub release, and smoke test:
+pnpm release:publish --resume
 ```
+
+A local upload is the unsigned alternative, with no provenance attestation:
+`pnpm release:publish --tag next --yes`. Never omit `--tag next` for an RC.
+
+The full procedure — the authoritative CI gate, the `publish.yml` provenance
+path, the demo deploy, and rollback — is in [docs/release.md](docs/release.md).
+Publishes from `.github/workflows/publish.yml` are signed; a local
+`pnpm release:publish` is unsigned, because `--provenance` needs a CI OIDC
+identity that a laptop does not have.
 
 - `release:prepare` requires a `## <version>` section in `CHANGELOG.md`; it
   refuses to bump without one. You can write that section on `main` and leave
@@ -332,7 +571,8 @@ pnpm release:publish         # tag, npm publish, GitHub release, smoke test
 - `release:prepare` waits for the deploy run; if GitHub misses the push event,
   it dispatches `deploy.yml` from `main` instead of silently skipping the
   deploy check.
-- For a 2FA account: `NPM_OTP=123456 pnpm release:publish`.
+- For a 2FA account, prefix the local publish with `NPM_OTP=123456`; add
+  `--tag next` for an RC (`NPM_OTP=123456 pnpm release:publish --tag next --yes`).
 
 The repo’s `main` ruleset requires a PR and the `verify` check, so
 `release:prepare` merges only after CI passes.
@@ -344,17 +584,73 @@ consumers should use `"moduleResolution": "bundler"` (the default for Vite,
 Next, and modern webpack). A Node16/NodeNext consumer will need to point at the
 sources or add the extensions itself.
 
-All four entry points are verified by installing the package into an empty
-project and importing it, not just by running the tests.
+All five entry points are verified against the packed tarball by `publint` and
+`attw`, and a release smoke test installs the package into an empty project and
+imports the root entry. The install smoke does not import each subpath; the
+subpath exports are checked statically against the tarball.
 
 ## Limits
 
 - One file per transfer. No resume across a reload — a human restarts it.
 - No history, no chat, no two-way stream.
-- **1 MiB is minutes, not seconds.** At the `fast` preset an incompressible
-  megabyte is K = 1252 blocks, roughly 146 seconds of scanning at 1.75x
-  overhead. JSON compresses 3-8x, so a typical 1 MiB document finishes in
+- **Three budgets, not one.** Raw input may be up to **8 MiB**
+  (`MAX_INPUT_BYTES`), the compressed body before encryption up to **1 MiB**
+  (`MAX_WIRE_BYTES`), and the decoded result up to **8 MiB**
+  (`MAX_DECODED_BYTES`). Compression runs first, so a large JSON document can
+  fit the wire cap even when its raw size is several times larger.
+- **The writer reports the split.** `writer.plainBytes` is the original input,
+  `writer.wireBytes` the compressed body (`meta.wireLen`), and
+  `writer.payloadBytes` the full assembled payload including metadata and, when
+  encrypted, the GCM tag.
+- **Limits only tighten.** `limits.maxWireBytes` and `limits.maxInputBytes` on
+  the writer, and `limits.maxWireBytes` / `limits.maxDecodedBytes` on the
+  reader, may lower a default but never raise it. A limit that is not a positive
+  integer at or below the hard ceiling is rejected with `INVALID_ARGUMENT`.
+- **0.2 interop:** the wire format and encryption format are unchanged. A 1.0
+  stream is readable by a 0.2 receiver for plaintext up to 1 MiB, encrypted or
+  not — 0.2 still enforces its 1 MiB plaintext cap on encrypted input. For a
+  mixed-version fleet, opt down with `limits: { maxInputBytes: 1024 * 1024 }`
+  on the sender.
+- **1 MiB on the wire is minutes, not seconds.** At the `fast` preset an
+  incompressible megabyte is K = 1252 blocks, roughly 146 seconds of scanning at
+  1.75x overhead. JSON compresses 3-8x, so a typical 1 MiB document finishes in
   15-30 seconds. The sender shows the estimate once the file is loaded.
 - Encryption protects against a bystander recording the screen. It does not
   protect against a weak passphrase: a spoken three-word phrase is crackable
   offline in about a day. Six words or a random passphrase.
+
+See [Limits and version compatibility](docs/integration.md#5-limits-and-version-compatibility)
+for the constants, the writer fields, and the 0.2 opt-down recipe.
+
+## Documentation
+
+- [API reference](https://orozcoh.github.io/qr-stream/) — TypeDoc for all five
+  public entry points.
+- [Examples](examples/) — minimal sender, minimal receiver, and React hooks;
+  build with `pnpm examples:build`.
+- [Integration guide](docs/integration.md) — hosts, PWA, camera lifecycle,
+  limits, errors, styling/i18n, and two-device testing.
+- [Migration from 0.2 to 1.0](docs/migration-0.2-to-1.0.md) — API changes with
+  before/after code.
+- [Troubleshooting](docs/troubleshooting.md) — offline WASM, camera, limits,
+  passphrases, CSP, React, and canvas sizing.
+- [Threat model](docs/threat-model.md) — malicious payloads, gzip bombs, KDF
+  DoS, filename injection, WASM supply chain, and camera privacy.
+- [Performance](docs/performance.md) — benchmark numbers, budgets, and method.
+- [Wire format](docs/wire-format.md) — packet, metadata, fountain, and crypto.
+
+## Security and community
+
+- [Security policy](SECURITY.md) — supported versions, private vulnerability
+  reporting, the threat-model summary, and the no-telemetry, WASM/CDN, and
+  camera-privacy guidance.
+- [Contributing](CONTRIBUTING.md) — setup, layer rules, public-API and API
+  report discipline, the test expectations, and commit style.
+- [Support](SUPPORT.md) — where to ask a question, where to report a bug, and
+  what to expect (best-effort, no SLA).
+- [Release guide](docs/release.md) — preflight, changelog, the full gate,
+  publish, provenance, demo deploy, and rollback.
+- [Code of conduct](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1.
+
+Please do not open a public issue for a suspected vulnerability: use
+[GitHub private vulnerability reporting](https://github.com/orozcoh/qr-stream/security/advisories/new).

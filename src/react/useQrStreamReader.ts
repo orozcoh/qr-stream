@@ -1,10 +1,17 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { WrongKeyError } from '../core/crypto';
-import type { StreamMeta } from '../core/meta';
-import { createQrStreamReader } from '../core/reader';
+import { QrStreamError, WrongKeyError, isQrStreamError } from '../core/errors.js';
+import type { StreamMeta } from '../core/meta.js';
+import { createQrStreamReader, type QrStreamReader } from '../core/reader.js';
+import type { ReaderLimits } from '../core/types.js';
 
 export interface UseQrStreamReaderOptions {
   passphrase?: string;
+  /**
+   * Transfer budgets. Initial configuration: they are read when the reader is
+   * created on the first render (invalid values throw during that render), and
+   * changing them later does not rebuild an in-progress reader.
+   */
+  limits?: ReaderLimits;
 }
 
 export interface UseQrStreamReaderResult {
@@ -15,7 +22,7 @@ export interface UseQrStreamReaderResult {
   wrongKey: boolean;
   /** Frames from a different transfer keep arriving while this one is stuck. */
   stale: boolean;
-  error: string | null;
+  error: QrStreamError | null;
   add(bytes: Uint8Array): void;
   retryKey(passphrase: string): Promise<void>;
   reset(): void;
@@ -33,7 +40,14 @@ const STALE_PROMPT_THRESHOLD = 12;
  * displayed fps is a better signal than anything the receiver could infer.
  */
 export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQrStreamReaderResult {
-  const readerRef = useRef(createQrStreamReader());
+  // Limits are initial configuration, so they are read only when the reader is
+  // first created. Lazy initialisation keeps a render from constructing (and
+  // discarding) a reader on every pass.
+  const readerRef = useRef<QrStreamReader | null>(null);
+  if (readerRef.current === null) {
+    readerRef.current = createQrStreamReader({ limits: options.limits });
+  }
+  const reader = readerRef.current;
   const stampsRef = useRef<number[]>([]);
   const finishingRef = useRef(false);
   const failedHardRef = useRef(false);
@@ -46,42 +60,51 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
   const [result, setResult] = useState<{ data: Uint8Array; meta: StreamMeta } | null>(null);
   const [wrongKey, setWrongKey] = useState(false);
   const [stale, setStale] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<QrStreamError | null>(null);
 
-  const finish = useCallback(async (passphrase: string | undefined) => {
-    // One derivation at a time: a burst of frames arriving together must not
-    // start several 600k-iteration PBKDF2 jobs.
-    if (finishingRef.current || failedHardRef.current) return;
-    finishingRef.current = true;
-    const myEpoch = epochRef.current;
-    try {
-      const assembled = await readerRef.current.result(passphrase);
-      // A reset or a second session while the derivation was in flight must not
-      // deliver the abandoned transfer.
-      if (epochRef.current !== myEpoch) return;
-      if (assembled === null) return;
-      setResult(assembled);
-      setWrongKey(false);
-      setError(null);
-    } catch (cause) {
-      if (epochRef.current !== myEpoch) return;
-      if (cause instanceof WrongKeyError) {
-        setWrongKey(true);
-        setError('That passphrase does not match. Try again — no need to rescan.');
-      } else {
-        // A checksum or decompression failure will fail identically forever;
-        // retrying it at camera frame rate would spin.
-        failedHardRef.current = true;
-        setError(cause instanceof Error ? cause.message : String(cause));
+  const finish = useCallback(
+    async (passphrase: string | undefined) => {
+      // One derivation at a time: a burst of frames arriving together must not
+      // start several 600k-iteration PBKDF2 jobs.
+      if (finishingRef.current || failedHardRef.current) return;
+      finishingRef.current = true;
+      const myEpoch = epochRef.current;
+      try {
+        const assembled = await reader.result(passphrase);
+        // A reset or a second session while the derivation was in flight must not
+        // deliver the abandoned transfer.
+        if (epochRef.current !== myEpoch) return;
+        if (assembled === null) return;
+        setResult(assembled);
+        setWrongKey(false);
+        setError(null);
+      } catch (cause) {
+        if (epochRef.current !== myEpoch) return;
+        if (cause instanceof WrongKeyError) {
+          setWrongKey(true);
+          setError(cause);
+        } else {
+          // A checksum or decompression failure will fail identically forever;
+          // retrying it at camera frame rate would spin.
+          failedHardRef.current = true;
+          setError(
+            isQrStreamError(cause)
+              ? cause
+              : new QrStreamError('INVALID_ARGUMENT', cause instanceof Error ? cause.message : String(cause), {
+                  cause,
+                }),
+          );
+        }
+      } finally {
+        finishingRef.current = false;
       }
-    } finally {
-      finishingRef.current = false;
-    }
-  }, []);
+    },
+    [reader],
+  );
 
   const add = useCallback(
     (bytes: Uint8Array) => {
-      const outcome = readerRef.current.add(bytes);
+      const outcome = reader.add(bytes);
 
       if (outcome === 'stale-session') {
         staleRef.current += 1;
@@ -98,7 +121,7 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
       stamps.push(now);
       while (stamps.length > 0 && now - (stamps[0] as number) > RATE_WINDOW_MS) stamps.shift();
 
-      const next = readerRef.current.progress();
+      const next = reader.progress();
       setProgress(next);
       setSolveRate(stamps.length);
 
@@ -110,7 +133,7 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
         void finish(options.passphrase);
       }
     },
-    [finish, options.passphrase],
+    [finish, options.passphrase, reader],
   );
 
   const retryKey = useCallback(
@@ -122,7 +145,7 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
   );
 
   const reset = useCallback(() => {
-    readerRef.current.reset();
+    reader.reset();
     stampsRef.current = [];
     finishingRef.current = false;
     failedHardRef.current = false;
@@ -135,7 +158,7 @@ export function useQrStreamReader(options: UseQrStreamReaderOptions = {}): UseQr
     setWrongKey(false);
     setStale(false);
     setError(null);
-  }, []);
+  }, [reader]);
 
   return useMemo(
     () => ({ progress, solveRate, result, wrongKey, stale, error, add, retryKey, reset }),

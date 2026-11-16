@@ -11,8 +11,8 @@ describe('qrCapacity', () => {
   });
 
   test('rejects an out-of-range version', () => {
-    expect(() => qrCapacity(0)).toThrow(RangeError);
-    expect(() => qrCapacity(41)).toThrow(RangeError);
+    expect(() => qrCapacity(0)).toThrow(expect.objectContaining({ code: 'INVALID_QR_VERSION' }));
+    expect(() => qrCapacity(41)).toThrow(expect.objectContaining({ code: 'INVALID_QR_VERSION' }));
   });
 });
 
@@ -50,7 +50,7 @@ describe('packetToMatrix', () => {
 
   test('rejects a packet larger than the version holds', () => {
     const tooBig = new Uint8Array(qrCapacity(20) + 1);
-    expect(() => packetToMatrix(tooBig, 20)).toThrow(RangeError);
+    expect(() => packetToMatrix(tooBig, 20)).toThrow(expect.objectContaining({ code: 'PACKET_TOO_LARGE' }));
   });
 
   test('accepts a packet that exactly fills the capacity', () => {
@@ -61,7 +61,10 @@ describe('packetToMatrix', () => {
 
   test('different packets produce different matrices', () => {
     const a = packetToMatrix(packet, 20);
-    const b = packetToMatrix(Uint8Array.from(packet, (v) => v ^ 0xff), 20);
+    const b = packetToMatrix(
+      Uint8Array.from(packet, (v) => v ^ 0xff),
+      20,
+    );
     let differences = 0;
     for (let y = 0; y < a.size; y += 1) {
       for (let x = 0; x < a.size; x += 1) if (a.get(x, y) !== b.get(x, y)) differences += 1;

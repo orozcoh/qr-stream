@@ -1,0 +1,7 @@
+{
+  "hello": "airgap",
+  "records": [
+    { "id": 1, "active": true },
+    { "id": 2, "active": false }
+  ]
+}

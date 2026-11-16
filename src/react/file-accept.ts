@@ -4,6 +4,8 @@
  * The attribute only filters the native picker — drag-and-drop and "All files"
  * walk straight past it — so the restriction has to be enforced here too, or
  * the component quietly sends something the host said it did not want.
+ *
+ * @internal
  */
 export function matchesAccept(file: File, accept: string | undefined): boolean {
   if (accept === undefined || accept.trim() === '') return true;
@@ -25,11 +27,18 @@ export function matchesAccept(file: File, accept: string | undefined): boolean {
   });
 }
 
-/** Human-readable form of an `accept` value, for helper text. */
-export function describeAccept(accept: string): string {
+/**
+ * Human-readable form of an `accept` value, for helper text.
+ *
+ * Only the restriction list is returned: the surrounding `accepts` string is a
+ * template, so the label that introduces it stays translatable.
+ *
+ * @internal
+ */
+export function describeAcceptTypes(accept: string): string {
   const parts = accept
     .split(',')
     .map((rule) => rule.trim())
     .filter((rule) => rule.length > 0);
-  return `Accepts ${parts.join(', ')}`;
+  return parts.join(', ');
 }

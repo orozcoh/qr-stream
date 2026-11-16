@@ -1,0 +1,328 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-11-16T12:27:40.549Z",
+  "runtime": {
+    "node": "v25.6.1",
+    "platform": "darwin",
+    "arch": "arm64",
+    "release": "25.5.0"
+  },
+  "environment": {
+    "cpu": "Apple M1",
+    "cores": 8,
+    "totalMemoryMiB": 8192,
+    "forcedGc": true
+  },
+  "metrics": [
+    {
+      "id": "writer.json.plain",
+      "group": "writer",
+      "description": "gzip + SHA-256 + block split, 1 MiB compressible JSON, no passphrase",
+      "unit": "ms",
+      "value": 6.7112,
+      "p50": 6.3297,
+      "p99": 13.6604,
+      "rme": 5.4,
+      "samples": 120
+    },
+    {
+      "id": "writer.random.plain",
+      "group": "writer",
+      "description": "gzip attempt + SHA-256 + block split, 1 MiB incompressible data",
+      "unit": "ms",
+      "value": 21.1067,
+      "p50": 20.662,
+      "p99": 23.0151,
+      "rme": 1.32,
+      "samples": 38
+    },
+    {
+      "id": "writer.random.encodeRepair",
+      "group": "writer",
+      "description": "encode one repair symbol for the 1 MiB / fast-preset stream",
+      "unit": "ms",
+      "value": 0.0933,
+      "p50": 0.0921,
+      "p99": 0.1118,
+      "rme": 0.25,
+      "samples": 8571
+    },
+    {
+      "id": "writer.json.encrypted",
+      "group": "writer",
+      "description": "1 MiB compressible JSON with PBKDF2 (600k) + AES-GCM",
+      "unit": "ms",
+      "value": 77.8059,
+      "p50": 77.6216,
+      "p99": 80.5302,
+      "rme": 0.33,
+      "samples": 33
+    },
+    {
+      "id": "writer.random.encrypted",
+      "group": "writer",
+      "description": "1 MiB incompressible data with PBKDF2 (600k) + AES-GCM",
+      "unit": "ms",
+      "value": 92.5439,
+      "p50": 92.2294,
+      "p99": 94.2762,
+      "rme": 0.35,
+      "samples": 28
+    },
+    {
+      "id": "writer.random.plain.heap",
+      "group": "writer",
+      "description": "approximate retained heap + ArrayBuffer after a plain 1 MiB prepare",
+      "unit": "MiB",
+      "value": 1.8531,
+      "p50": 1.8531,
+      "p99": 1.8531,
+      "rme": 0,
+      "samples": 1,
+      "approximate": true
+    },
+    {
+      "id": "writer.random.encrypted.heap",
+      "group": "writer",
+      "description": "approximate retained heap + ArrayBuffer after an encrypted 1 MiB prepare",
+      "unit": "MiB",
+      "value": 2.0029,
+      "p50": 2.0029,
+      "p99": 2.0029,
+      "rme": 0,
+      "samples": 1,
+      "approximate": true
+    },
+    {
+      "id": "fountain.stream.decode",
+      "group": "fountain",
+      "description": "decode a lossy 1 MiB / fast-preset stream (1/4 of systematic frames missing)",
+      "unit": "ms",
+      "value": 967.2702,
+      "p50": 962.2996,
+      "p99": 992.6312,
+      "rme": 1.43,
+      "samples": 6
+    },
+    {
+      "id": "fountain.stream.assemble",
+      "group": "fountain",
+      "description": "concatenate 1252 solved blocks into the 1 MiB payload",
+      "unit": "ms",
+      "value": 0.1662,
+      "p50": 0.1518,
+      "p99": 0.8444,
+      "rme": 1.56,
+      "samples": 4213
+    },
+    {
+      "id": "fountain.stream.symbolsToComplete",
+      "group": "fountain",
+      "description": "packets needed to close the lossy 1 MiB stream (lower is better)",
+      "unit": "packets",
+      "value": 1254,
+      "p50": 1254,
+      "p99": 1254,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v20.packetToMatrix",
+      "group": "render",
+      "description": "encode one full packet as a version 20 QR matrix",
+      "unit": "ms",
+      "value": 12.7047,
+      "p50": 11.7128,
+      "p99": 27.5888,
+      "rme": 7.12,
+      "samples": 56
+    },
+    {
+      "id": "render.v40.packetToMatrix",
+      "group": "render",
+      "description": "encode one full packet as a version 40 QR matrix",
+      "unit": "ms",
+      "value": 40.9413,
+      "p50": 40.7637,
+      "p99": 43.5054,
+      "rme": 1.67,
+      "samples": 18
+    },
+    {
+      "id": "render.v20.matrixToRGBA",
+      "group": "render",
+      "description": "expand a version 20 matrix at scale 1 (one pixel per module + quiet zone)",
+      "unit": "ms",
+      "value": 0.1243,
+      "p50": 0.1223,
+      "p99": 0.1401,
+      "rme": 0.63,
+      "samples": 5632
+    },
+    {
+      "id": "render.v40.matrixToRGBA",
+      "group": "render",
+      "description": "expand a version 40 matrix at scale 1 (one pixel per module + quiet zone)",
+      "unit": "ms",
+      "value": 0.4691,
+      "p50": 0.4231,
+      "p99": 1.3068,
+      "rme": 4.7,
+      "samples": 1493
+    },
+    {
+      "id": "render.v20.paintFrame",
+      "group": "render",
+      "description": "full paint path per frame at v20 (fake canvas; excludes raster compositing)",
+      "unit": "ms",
+      "value": 13.1251,
+      "p50": 13.2775,
+      "p99": 13.8723,
+      "rme": 5.68,
+      "samples": 6
+    },
+    {
+      "id": "render.v40.paintFrame",
+      "group": "render",
+      "description": "full paint path per frame at v40 (fake canvas; excludes raster compositing)",
+      "unit": "ms",
+      "value": 40.2302,
+      "p50": 40.119,
+      "p99": 40.5284,
+      "rme": 0.58,
+      "samples": 6
+    },
+    {
+      "id": "render.v20.sustainedFps",
+      "group": "render",
+      "description": "derived frames/second from the v20 paint measurement (60 Hz refresh)",
+      "unit": "fps",
+      "value": 76.1899,
+      "p50": 76.1899,
+      "p99": 76.1899,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v40.sustainedFps",
+      "group": "render",
+      "description": "derived frames/second from the v40 paint measurement (60 Hz refresh)",
+      "unit": "fps",
+      "value": 24.8569,
+      "p50": 24.8569,
+      "p99": 24.8569,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v40.rgbaBufferKiB",
+      "group": "render",
+      "description": "returned RGBA buffer size per v40 frame, read from a real matrixToRGBA call at scale 1",
+      "unit": "KiB",
+      "value": 133.6914,
+      "p50": 133.6914,
+      "p99": 133.6914,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v40.paintAllocKiB",
+      "group": "render",
+      "description": "measured ArrayBuffer growth per painted v40 frame (16 frames, GC before each round)",
+      "unit": "KiB",
+      "value": 133.6914,
+      "p50": 133.6914,
+      "p99": 133.6914,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "render.v40.frameBytesKiB",
+      "group": "render",
+      "description": "Uint8ClampedArray bytes allocated per painted v40 frame (constructor accounting)",
+      "unit": "KiB",
+      "value": 133.6914,
+      "p50": 133.6914,
+      "p99": 133.6914,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "reader.stream.add",
+      "group": "reader",
+      "description": "add every accepted packet of the lossy 1 MiB stream (CRC + plausibility + fountain)",
+      "unit": "ms",
+      "value": 963.6704,
+      "p50": 961.1717,
+      "p99": 976.1691,
+      "rme": 0.72,
+      "samples": 6
+    },
+    {
+      "id": "reader.stream.reassemble",
+      "group": "reader",
+      "description": "the same add loop plus result(): SHA-256 verification of 1 MiB",
+      "unit": "ms",
+      "value": 1003.7182,
+      "p50": 977.0438,
+      "p99": 1076.1669,
+      "rme": 5.32,
+      "samples": 6
+    },
+    {
+      "id": "reader.frame.add",
+      "group": "reader",
+      "description": "derived mean cost per accepted frame at 15 fps",
+      "unit": "ms",
+      "value": 0.7685,
+      "p50": 0.7685,
+      "p99": 0.7685,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "reader.zxing.startup",
+      "group": "reader",
+      "description": "compile instantiate the zxing reader wasm (Node, binary from disk)",
+      "unit": "ms",
+      "value": 8.9784,
+      "p50": 8.9784,
+      "p99": 8.9784,
+      "rme": 0,
+      "samples": 1
+    },
+    {
+      "id": "reader.zxing.720p.v20",
+      "group": "reader",
+      "description": "read a synthetic 1280x720 frame containing a version 20 code",
+      "unit": "ms",
+      "value": 5.4866,
+      "p50": 5.4428,
+      "p99": 5.8704,
+      "rme": 0.49,
+      "samples": 219
+    },
+    {
+      "id": "reader.zxing.720p.v40",
+      "group": "reader",
+      "description": "read a synthetic 1280x720 frame containing a version 40 code",
+      "unit": "ms",
+      "value": 7.0124,
+      "p50": 6.9826,
+      "p99": 7.3529,
+      "rme": 0.23,
+      "samples": 172
+    },
+    {
+      "id": "reader.zxing.1080p.v40",
+      "group": "reader",
+      "description": "read a synthetic 1920x1080 frame containing a version 40 code",
+      "unit": "ms",
+      "value": 14.2321,
+      "p50": 14.0378,
+      "p99": 19.9426,
+      "rme": 1.4,
+      "samples": 85
+    }
+  ]
+}

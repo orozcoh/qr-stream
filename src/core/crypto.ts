@@ -1,13 +1,24 @@
-/** Raised whenever AES-GCM authentication fails — a wrong key or a damaged payload. */
-export class WrongKeyError extends Error {
-  constructor(message = 'The passphrase does not match this transfer, or the payload is damaged.') {
-    super(message);
-    this.name = 'WrongKeyError';
-  }
-}
+import { WrongKeyError } from './errors.js';
 
+/**
+ * Default PBKDF2 iteration count, stored in the metadata block.
+ *
+ * @internal
+ */
 export const DEFAULT_ITERATIONS = 600_000;
+
+/**
+ * Salt length for PBKDF2 key derivation.
+ *
+ * @internal
+ */
 export const SALT_BYTES = 16;
+
+/**
+ * AES-GCM nonce length.
+ *
+ * @internal
+ */
 export const NONCE_BYTES = 12;
 
 /** Spoken passphrases arrive with stray whitespace and inconsistent Unicode forms. */
@@ -32,6 +43,7 @@ async function deriveKey(passphrase: string, salt: Uint8Array, iterations: numbe
   );
 }
 
+/** @internal */
 export interface EncryptOptions {
   /** Reuse a salt generated before the metadata block was built. */
   salt?: Uint8Array;
@@ -47,6 +59,8 @@ export interface EncryptOptions {
  * Per-block encryption is not an option: a repair symbol is the XOR of several
  * ciphertext blocks, so the fountain decoder has to work on ciphertext and
  * decryption must happen after reconstruction.
+ *
+ * @internal
  */
 export async function encryptBytes(
   plain: Uint8Array,
@@ -66,6 +80,11 @@ export async function encryptBytes(
   return { ciphertext, salt, nonce, iterations };
 }
 
+/**
+ * Decrypt a reconstructed payload.
+ *
+ * @internal
+ */
 export async function decryptBytes(
   ciphertext: Uint8Array,
   passphrase: string,

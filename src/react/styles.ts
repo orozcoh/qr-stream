@@ -177,6 +177,27 @@ const CSS = `
   background: transparent;
 }
 
+/* The save control is an anchor so it can download; make it look like the
+   primary button without a nested <button> and its second focus stop. */
+:where(a.qrs__button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+:where(.qrs__sr-only) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
+
 :where(.qrs__button:hover:not(:disabled)) { border-color: var(--qrs-muted); }
 
 :where(.qrs__button--primary:hover:not(:disabled)) {
@@ -289,6 +310,11 @@ const STYLE_ID = 'qr-stream-styles';
 
 let injected = false;
 
+/**
+ * Inject the component stylesheet once per document.
+ *
+ * @internal
+ */
 export function ensureQrStreamStyles(): void {
   if (injected) return;
   if (typeof document === 'undefined') return;

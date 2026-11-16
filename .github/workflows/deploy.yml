@@ -48,6 +48,9 @@ jobs:
       - name: Build library
         run: pnpm build
 
+      - name: Check API report
+        run: pnpm api:check
+
       - name: Build demo PWA
         run: pnpm demo:build
 

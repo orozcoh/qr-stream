@@ -1,0 +1,83 @@
+name: Feature request
+description: Propose a capability, preset, or API addition.
+title: 'feat: '
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project protects a small, documented surface: five entry points, a
+        stable wire format, and limits that bound attacker-requested work. A
+        proposal that names the constraint you hit is much easier to accept than
+        one that names only the API you want.
+
+        Relevant background: [limits](https://github.com/orozcoh/qr-stream/blob/main/README.md#limits),
+        [presets](https://github.com/orozcoh/qr-stream/blob/main/README.md#presets), and the
+        [threat model](https://github.com/orozcoh/qr-stream/blob/main/docs/threat-model.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you unable to do today, and what have you tried?
+      placeholder: I need to ... but the current API ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The behavior or API you suggest. Note whether it can be additive.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds, other decoders, or a host-side implementation.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Core codec (packets, fountain, limits)
+        - Crypto / passphrase handling
+        - QR rendering
+        - Camera and decoding
+        - React components and hooks
+        - Offline PWA behaviour
+        - Documentation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Would this change the public API or the wire format?
+      options:
+        - 'No — additive or internal only'
+        - 'Yes — public API change'
+        - 'Yes — wire-format change'
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, prior art, measurements, or a sketch.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and the documentation for this capability.
+          required: true
+        - label: I am willing to open a pull request for this if the design is agreed.
+          required: false

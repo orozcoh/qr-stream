@@ -1,12 +1,19 @@
-import { crc32 } from './crc32';
-import { HEADER_SIZE } from './types';
+import { crc32 } from './crc32.js';
+import { HEADER_SIZE } from './types.js';
 
-/** "QS" — rejects QR codes that belong to something else. */
+/**
+ * "QS" — rejects QR codes that belong to something else.
+ *
+ * @internal
+ */
 export const MAGIC = 0x5153;
 
+/** @internal */
 export const FLAG_GZIP = 1;
+/** @internal */
 export const FLAG_ENCRYPTED = 2;
 
+/** @internal */
 export interface Packet {
   version: number;
   flags: number;
@@ -24,8 +31,13 @@ export interface Packet {
 
 /**
  * Encode a packet. Layout, big-endian:
- * `magic u16 | version u8 | flags u8 | sessionId u32 | symbolIdx u16 |
- *  k u16 | blockSize u16 | payloadLen u16 | payload | crc32 u32`
+ *
+ * ```text
+ * magic u16 | version u8 | flags u8 | sessionId u32 | symbolIdx u16 |
+ * k u16 | blockSize u16 | payloadLen u16 | payload | crc32 u32
+ * ```
+ *
+ * @internal
  */
 export function encodePacket(packet: Packet): Uint8Array {
   const { payload } = packet;
@@ -49,6 +61,8 @@ export function encodePacket(packet: Packet): Uint8Array {
 /**
  * Decode a packet, returning `null` for anything that is not a well-formed
  * frame of this format: wrong magic, wrong length, or a CRC mismatch.
+ *
+ * @internal
  */
 export function decodePacket(bytes: Uint8Array): Packet | null {
   if (bytes.length < HEADER_SIZE + 4) return null;

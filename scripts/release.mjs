@@ -8,13 +8,17 @@
  *
  * No dependencies. The auth preflight refuses to run if the active gh account
  * does not own the repo or npm is not logged in.
+ *
+ * npm provenance is added only where it can be signed: a GitHub Actions job
+ * with an OIDC token. A local publish is unsigned, and the script says so
+ * instead of passing a flag that would fail.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { createInterface } from 'node:readline/promises';
 
 const REPO = 'orozcoh/qr-stream';
 const PACKAGE = '@orozcoh/qr-stream';
@@ -46,6 +50,25 @@ function info(message) {
 }
 function note(message) {
   console.log(`  ${message}`);
+}
+
+// npm provenance needs an OIDC token minted by a supported CI, not an npm
+// login. Passing --provenance outside that context fails the publish, so the
+// flag is added only when the environment can actually sign.
+function provenanceState() {
+  if (process.env.GITHUB_ACTIONS !== 'true') {
+    return {
+      sign: false,
+      note: 'skipped — a local publish has no CI OIDC identity, so the tarball will be unsigned',
+    };
+  }
+  if (!process.env.ACTIONS_ID_TOKEN_REQUEST_URL || !process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN) {
+    return {
+      sign: false,
+      note: 'skipped — GITHUB_ACTIONS is set but the job has no OIDC token; add "permissions: id-token: write"',
+    };
+  }
+  return { sign: true, note: 'enabled — signing with the GitHub Actions OIDC token' };
 }
 
 function printable(cmd, cmdArgs) {
@@ -89,7 +112,9 @@ function capture(cmd, cmdArgs, options = {}) {
   });
   if (result.error) fail(`${cmd}: ${result.error.message}`);
   if (result.status !== 0 && !options.allowFail) {
-    fail(`${printable(cmd, cmdArgs)} failed (exit ${result.status})${result.stderr ? `\n${result.stderr.trim()}` : ''}`);
+    fail(
+      `${printable(cmd, cmdArgs)} failed (exit ${result.status})${result.stderr ? `\n${result.stderr.trim()}` : ''}`,
+    );
   }
   const text = result.stdout ?? '';
   return {
@@ -262,7 +287,8 @@ function checkDeploy(sha) {
       latest = findDeployRun(sha);
     }
   }
-  if (!latest) fail(`no deploy run found for ${sha.slice(0, 7)}; run: gh workflow run deploy.yml --repo ${REPO} --ref main`);
+  if (!latest)
+    fail(`no deploy run found for ${sha.slice(0, 7)}; run: gh workflow run deploy.yml --repo ${REPO} --ref main`);
   if (latest.status !== 'completed') {
     info(`waiting for deploy ${latest.databaseId}`);
     run('gh', ['run', 'watch', String(latest.databaseId), '--repo', REPO, '--exit-status', '--interval', '10']);
@@ -437,8 +463,12 @@ async function publish() {
   }
 
   if (dry) {
+    const provenance = provenanceState();
     info(`dry run: publish ${PACKAGE}@${version}`);
-    note(`would tag ${tag}, push it, ${published ? 'skip npm publish (already published)' : 'run npm publish'}, ${hasRelease ? 'update' : 'create'} the GitHub release, and smoke-test`);
+    note(
+      `would tag ${tag}, push it, ${published ? 'skip npm publish (already published)' : 'run npm publish'}, ${hasRelease ? 'update' : 'create'} the GitHub release, and smoke-test`,
+    );
+    note(`provenance: ${provenance.note}`);
     return;
   }
 
@@ -447,7 +477,10 @@ async function publish() {
   if (!remoteTag) run('git', ['push', 'origin', tag]);
 
   if (!published) {
+    const provenance = provenanceState();
+    note(`provenance: ${provenance.note}`);
     const npmArgs = ['publish'];
+    if (provenance.sign) npmArgs.push('--provenance');
     if (process.env.NPM_OTP) npmArgs.push('--otp', process.env.NPM_OTP);
     if (distTag !== 'latest') npmArgs.push('--tag', distTag);
     run('npm', npmArgs);
@@ -492,7 +525,12 @@ Options:
   --tag <name>          npm dist-tag (default: latest)
 
 Environment:
-  NPM_OTP               passed to npm publish as --otp when set`);
+  NPM_OTP               passed to npm publish as --otp when set
+
+Provenance:
+  --provenance is added automatically when the command runs in GitHub Actions
+  with an OIDC token (permissions: id-token: write). A local publish is
+  unsigned, and this script says so rather than failing the publish.`);
 }
 
 async function main() {

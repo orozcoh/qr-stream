@@ -1,3 +1,5 @@
+import { QrStreamError } from './errors.js';
+
 export interface StreamMeta {
   /** Original file name, at most 64 UTF-8 bytes. */
   filename: string;
@@ -24,8 +26,14 @@ const SHA256_BYTES = 32;
  * name that is rendered and offered as a download. Strip them rather than
  * trusting the peer's filename verbatim.
  */
+// eslint-disable-next-line no-control-regex -- the class must strip control and bidi characters
 const UNSAFE_FILENAME_CHARS = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069/\\]/g;
 
+/**
+ * Strip a peer-supplied filename down to something safe to render and save.
+ *
+ * @internal
+ */
 export function sanitizeFilename(name: string): string {
   const cleaned = name.replace(UNSAFE_FILENAME_CHARS, '').trim();
   return cleaned.length > 0 ? cleaned : 'payload';
@@ -41,6 +49,24 @@ function truncateUtf8(text: string, maxBytes: number): Uint8Array {
   return full.subarray(0, end);
 }
 
+function invalidMetadata(message: string): QrStreamError {
+  return new QrStreamError('INVALID_METADATA', message, { recovery: 'rescan' });
+}
+
+/**
+ * Sanitized and byte-truncated filename, exactly as the receiver will save it.
+ *
+ * @internal
+ */
+export function normalizeFilename(name: string): string {
+  return new TextDecoder().decode(truncateUtf8(sanitizeFilename(name), MAX_FILENAME_BYTES));
+}
+
+/**
+ * Encode a varint.
+ *
+ * @internal
+ */
 export function writeVarint(value: number): Uint8Array {
   const out: number[] = [];
   let rest = value;
@@ -53,27 +79,37 @@ export function writeVarint(value: number): Uint8Array {
   return Uint8Array.from(out);
 }
 
+/**
+ * Read one canonical varint.
+ *
+ * @internal
+ */
 export function readVarint(bytes: Uint8Array, offset: number): { value: number; next: number } {
   let value = 0;
   let shift = 1;
   let cursor = offset;
   for (;;) {
-    if (cursor >= bytes.length) throw new RangeError('truncated varint');
+    if (cursor >= bytes.length) throw invalidMetadata('truncated varint');
     const byte = bytes[cursor] as number;
     // A zero final byte after a continuation is a non-canonical encoding of a
     // smaller value. Rejecting it keeps every parser reading one shape.
-    if (cursor > offset && byte === 0) throw new RangeError('non-canonical varint');
+    if (cursor > offset && byte === 0) throw invalidMetadata('non-canonical varint');
     value += (byte & 0x7f) * shift;
     shift *= 128;
     cursor += 1;
     if ((byte & 0x80) === 0) break;
-    if (shift > 2 ** 49) throw new RangeError('varint too large');
+    if (shift > 2 ** 49) throw invalidMetadata('varint too large');
   }
   return { value, next: cursor };
 }
 
+/**
+ * Encode the metadata block.
+ *
+ * @internal
+ */
 export function encodeMeta(meta: StreamMeta): Uint8Array {
-  const filename = truncateUtf8(sanitizeFilename(meta.filename), MAX_FILENAME_BYTES);
+  const filename = new TextEncoder().encode(normalizeFilename(meta.filename));
   const salt = meta.salt ?? new Uint8Array(0);
   const nonce = meta.nonce ?? new Uint8Array(0);
 
@@ -95,7 +131,9 @@ export function encodeMeta(meta: StreamMeta): Uint8Array {
   view.setUint32(offset, meta.wireLen);
   offset += 4;
 
-  if (meta.sha256.length !== SHA256_BYTES) throw new RangeError('sha256 must be 32 bytes');
+  if (meta.sha256.length !== SHA256_BYTES) {
+    throw new QrStreamError('INVALID_ARGUMENT', 'sha256 must be 32 bytes');
+  }
   out.set(meta.sha256, offset);
   offset += SHA256_BYTES;
 
@@ -113,24 +151,37 @@ export function encodeMeta(meta: StreamMeta): Uint8Array {
   return out;
 }
 
+/**
+ * Decode and validate a metadata block.
+ *
+ * @internal
+ */
 export function decodeMeta(bytes: Uint8Array): StreamMeta {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let offset = 0;
 
   const need = (count: number): void => {
-    if (offset + count > bytes.length) throw new RangeError('metadata block truncated');
+    if (offset + count > bytes.length) throw invalidMetadata('metadata block truncated');
   };
 
   need(1);
   const version = bytes[offset] as number;
-  if (version !== META_VERSION) throw new RangeError(`unsupported metadata version ${version}`);
+  if (version !== META_VERSION) {
+    throw new QrStreamError('UNSUPPORTED_VERSION', `unsupported metadata version ${version}`, {
+      recovery: 'upgrade-library',
+    });
+  }
   offset += 1;
 
   need(1);
   const filenameLen = bytes[offset] as number;
   offset += 1;
   need(filenameLen);
-  const filename = sanitizeFilename(new TextDecoder().decode(bytes.subarray(offset, offset + filenameLen)));
+  const decodedName = sanitizeFilename(new TextDecoder().decode(bytes.subarray(offset, offset + filenameLen)));
+  // A peer can send invalid UTF-8, and each invalid byte decodes to a 3-byte
+  // replacement character. Re-truncate after decoding so the documented
+  // 64-byte filename bound holds for input as well as output.
+  const filename = new TextDecoder().decode(truncateUtf8(decodedName, MAX_FILENAME_BYTES));
   offset += filenameLen;
 
   need(8);
@@ -161,7 +212,7 @@ export function decodeMeta(bytes: Uint8Array): StreamMeta {
   const iterations = view.getUint32(offset);
   offset += 4;
 
-  if (offset !== bytes.length) throw new RangeError('trailing bytes in metadata block');
+  if (offset !== bytes.length) throw invalidMetadata('trailing bytes in metadata block');
 
   return { filename, plainLen, wireLen, sha256, salt, nonce, iterations };
 }

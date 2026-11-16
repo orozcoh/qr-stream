@@ -1,0 +1,22 @@
+{
+  "name": "@orozcoh/qr-stream-react18",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runtime compatibility check: the built React entry under React 18 and jsdom.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@orozcoh/qr-stream": "workspace:*",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "jsdom": "^26.1.0",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,5 +1,8 @@
-import { packetToMatrix } from '../qr/matrix';
-import { matrixToRGBA } from '../qr/raster';
+import { QrStreamError, RenderError } from '../core/errors.js';
+import { PRESETS } from '../core/types.js';
+import type { QrStreamWriter } from '../core/writer.js';
+import { packetToMatrix } from '../qr/matrix.js';
+import { matrixToRGBA, resolveRasterOptions, type RasterOptions } from '../qr/raster.js';
 
 /**
  * Snap a requested frame rate to a divisor of the display refresh rate.
@@ -42,13 +45,75 @@ export interface RenderController {
   framesPainted(): number;
 }
 
-export interface RenderOptions {
-  packets: AsyncIterable<Uint8Array>;
+export interface RenderBaseOptions {
   canvas: HTMLCanvasElement;
-  fps: number;
-  version: number;
+  /** Target frame rate. Writer mode defaults to the preset's rate. */
+  fps?: number;
   /** Display refresh rate used to quantise `fps`. Defaults to 60. */
   refreshHz?: number;
+  /**
+   * Target CSS width in pixels. Overrides the parent measurement and snaps
+   * down to an integer module scale, so the result may be slightly smaller.
+   */
+  size?: number;
+  /** Module and quiet-zone colors. Defaults to black on white. */
+  colors?: RasterOptions;
+}
+
+/**
+ * Bind the renderer to a writer so the QR version cannot drift.
+ *
+ * The writer is the single source of truth for the version it encoded into its
+ * packets; passing one alongside `packets` would let the two disagree.
+ */
+export interface RenderWriterOptions extends RenderBaseOptions {
+  writer: QrStreamWriter;
+  packets?: never;
+  version?: never;
+}
+
+/** Low-level form: paint an arbitrary packet stream at an explicit version. */
+export interface RenderPacketsOptions extends RenderBaseOptions {
+  packets: AsyncIterable<Uint8Array>;
+  version: number;
+  writer?: never;
+  fps: number;
+}
+
+export type RenderOptions = RenderWriterOptions | RenderPacketsOptions;
+
+interface ResolvedStream {
+  packets: AsyncIterable<Uint8Array>;
+  version: number;
+  fps: number;
+}
+
+/**
+ * Collapse the union into one shape.
+ *
+ * Exactly one mode must be present. A writer carries its own version and
+ * default rate, so a host cannot pair the wrong version with a writer's
+ * packets by accident.
+ */
+function resolveStream(options: RenderOptions): ResolvedStream {
+  const hasWriter = options.writer !== undefined;
+  const hasPackets = options.packets !== undefined;
+
+  if (hasWriter === hasPackets) {
+    throw new QrStreamError('INVALID_ARGUMENT', 'renderQrStream takes either a writer or raw packets, not both');
+  }
+
+  if (hasWriter) {
+    const { writer } = options as RenderWriterOptions;
+    return {
+      packets: writer.packets(),
+      version: writer.version,
+      fps: options.fps ?? PRESETS[writer.preset].fps,
+    };
+  }
+
+  const raw = options as RenderPacketsOptions;
+  return { packets: raw.packets, version: raw.version, fps: raw.fps };
 }
 
 /** Packets kept ready ahead of the paint loop. Enough to absorb jitter, not more. */
@@ -62,16 +127,23 @@ const QUEUE_CAP = 3;
  * what produces the moire that makes dense codes unreadable.
  */
 export function renderQrStream(options: RenderOptions): RenderController {
-  const { canvas, packets, version } = options;
+  const { packets, version, fps: requestedFps } = resolveStream(options);
+  const { canvas, size, colors } = options;
+  if (size !== undefined && (!Number.isFinite(size) || size <= 0)) {
+    throw new QrStreamError('INVALID_ARGUMENT', `size must be a positive finite number, got ${size}`);
+  }
+  // The paint loop catches per-frame errors, so bad colors must be rejected
+  // here or the host would get a permanently blank canvas instead of a code.
+  resolveRasterOptions(colors);
   const refreshHz = options.refreshHz ?? 60;
   const context = canvas.getContext('2d');
-  if (context === null) throw new Error('canvas 2d context unavailable');
+  if (context === null) throw new RenderError('canvas 2d context unavailable');
 
   const source = document.createElement('canvas');
   const sourceContext = source.getContext('2d');
-  if (sourceContext === null) throw new Error('offscreen 2d context unavailable');
+  if (sourceContext === null) throw new RenderError('offscreen 2d context unavailable');
 
-  let fps = quantizeFps(options.fps, refreshHz);
+  let fps = quantizeFps(requestedFps, refreshHz);
   let painted = 0;
   let running = false;
   let frameHandle = 0;
@@ -114,29 +186,46 @@ export function renderQrStream(options: RenderOptions): RenderController {
 
     try {
       const matrix = packetToMatrix(packet, version);
-      const image = matrixToRGBA(matrix, 1);
+      const image = matrixToRGBA(matrix, 1, colors);
       source.width = image.width;
       source.height = image.height;
       sourceContext.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
 
       const ratio = window.devicePixelRatio || 1;
-      // Measure the container, never the canvas: the canvas is sized to an exact
-      // integer multiple of the module grid, so its own CSS width is what we are
-      // about to change. Measuring it would feed the previous size back in.
-      const container = canvas.parentElement;
-      const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
-      const targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
-      const scale = Math.max(1, Math.floor(targetWidth / image.width));
-      const size = image.width * scale;
+      let targetWidth: number;
+      if (size !== undefined) {
+        // An explicit size wins over the parent. Never measure the canvas back:
+        // its CSS size is exactly what this frame is about to change.
+        targetWidth = Math.max(image.width, Math.floor(size * ratio));
+      } else {
+        // Measure the container, never the canvas: the canvas is sized to an
+        // exact integer multiple of the module grid, so its own CSS width is
+        // what we are about to change. Measuring it would feed the previous
+        // size back in.
+        const container = canvas.parentElement;
+        const cssWidth = container?.clientWidth ?? canvas.clientWidth ?? image.width;
+        targetWidth = Math.max(image.width, Math.floor(cssWidth * ratio));
+      }
 
-      if (canvas.width !== size || canvas.height !== size) {
-        canvas.width = size;
-        canvas.height = size;
+      const scale = Math.max(1, Math.floor(targetWidth / image.width));
+      const bitmapSize = image.width * scale;
+
+      if (canvas.width !== bitmapSize || canvas.height !== bitmapSize) {
+        canvas.width = bitmapSize;
+        canvas.height = bitmapSize;
+      }
+
+      // Pin the CSS size to the exact bitmap extent so a host `max-width`
+      // cannot reintroduce fractional scaling.
+      if (size !== undefined && canvas.style !== undefined) {
+        const cssSize = `${bitmapSize / ratio}px`;
+        canvas.style.width = cssSize;
+        canvas.style.height = cssSize;
       }
 
       context.imageSmoothingEnabled = false;
-      context.clearRect(0, 0, size, size);
-      context.drawImage(source, 0, 0, size, size);
+      context.clearRect(0, 0, bitmapSize, bitmapSize);
+      context.drawImage(source, 0, 0, bitmapSize, bitmapSize);
 
       painted += 1;
     } finally {
@@ -193,7 +282,13 @@ export function renderQrStream(options: RenderOptions): RenderController {
       running = false;
       cancelAnimationFrame(frameHandle);
       queue.length = 0;
-      void iterator.return?.(undefined);
+      try {
+        // A host iterator may reject on early close; that is not a render
+        // failure, and an unhandled rejection at camera frame rate is noise.
+        void iterator.return?.(undefined)?.catch(() => undefined);
+      } catch {
+        // A synchronous close failure is equally harmless here.
+      }
       // Remove the last painted QR. A stopped controller must not leave a
       // scannable frame on screen, especially when K=1 carries the whole file.
       context.clearRect(0, 0, canvas.width, canvas.height);

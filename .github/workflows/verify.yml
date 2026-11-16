@@ -9,6 +9,10 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -20,20 +24,94 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Dependency rules
+        run: pnpm deps:check
+
+      - name: Format check
+        run: pnpm format:check
+
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Typecheck React 18
+        run: pnpm typecheck:react18
 
       - name: Test
         run: pnpm test
 
+      - name: Fuzz
+        run: pnpm test:fuzz
+        env:
+          FUZZ_RUNS: 1000
+
+      - name: Coverage
+        run: pnpm test:coverage
+
       - name: Build library
         run: pnpm build
 
+      - name: Typecheck React 18 runtime
+        run: pnpm --filter @orozcoh/qr-stream-react18 typecheck
+
+      - name: Test React 18 runtime
+        run: pnpm --filter @orozcoh/qr-stream-react18 test
+
+      - name: Check API report
+        run: pnpm api:check
+
+      # One leg only: correctness already runs on both Node versions, and a
+      # second benchmark run doubles CI cost without adding signal. Ceilings
+      # in bench/budgets.json carry headroom for a slower shared runner.
+      - name: Bench budgets
+        if: matrix.node == 22
+        run: pnpm bench:check
+
       - name: Build demo PWA
         run: pnpm demo:build
+
+      - name: Build examples
+        run: pnpm examples:build
+
+      - name: Build API reference
+        run: pnpm docs:build
+
+      # Real-browser tests: one Chromium leg is enough; the two Node versions
+      # already cover the library itself through Vitest.
+      - name: Install Chromium
+        if: matrix.node == 22
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser end-to-end
+        if: matrix.node == 22
+        run: pnpm test:e2e
+
+      - name: Check package
+        run: pnpm check:package
+
+      - name: Check size
+        run: pnpm check:size
+
+  # The protected branch requires a check literally named "verify". Matrix jobs
+  # produce "verify (22)" / "verify (24)", so this gate publishes the required
+  # context and fails if either matrix leg fails.
+  verify-gate:
+    name: verify
+    needs: [verify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verify leg
+        run: |
+          if [ "${{ needs.verify.result }}" != "success" ]; then
+            echo "verify matrix result: ${{ needs.verify.result }}"
+            exit 1
+          fi

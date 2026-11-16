@@ -1,0 +1,127 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: #101014;
+  color: #e5e7eb;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+}
+
+p {
+  line-height: 1.5;
+}
+
+a {
+  color: #93c5fd;
+}
+
+code {
+  font-size: 0.9em;
+}
+
+.crumbs {
+  margin-top: 0;
+  font-size: 0.9rem;
+}
+
+.links {
+  line-height: 1.9;
+}
+
+.note {
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1rem 0;
+}
+
+.field input {
+  padding: 0.5rem;
+}
+
+.stage {
+  width: min(100%, 420px);
+  aspect-ratio: 1;
+  margin: 1rem auto;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.stage canvas {
+  display: block;
+}
+
+video {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 4 / 3;
+  margin: 1rem auto;
+  background: #000;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+button {
+  padding: 0.55rem 1rem;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background: #1f2937;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.status {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  min-height: 1.4em;
+}
+
+.error {
+  color: #fca5a5;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+}
+
+.row {
+  display: grid;
+  gap: 1rem;
+  margin: 2rem 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid #1f2937;
+}

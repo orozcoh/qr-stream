@@ -1,4 +1,5 @@
-import type { FrameDecoder } from './decoder';
+import { CameraError, DecoderError, type QrStreamError } from '../core/errors.js';
+import type { FrameDecoder } from './decoder.js';
 
 export interface CameraDevice {
   deviceId: string;
@@ -34,13 +35,18 @@ export interface CameraController {
   cycle(): Promise<void>;
   stop(): void;
   onSymbol(callback: (bytes: Uint8Array) => void): void;
-  onError(callback: (error: string) => void): void;
+  /** Single typed error channel. No string matching. */
+  onError(callback: (error: QrStreamError) => void): void;
   /** What the browser actually reports — the only way to explain a short list. */
   diagnostics(): CameraDiagnostics;
   /** Reopens the current camera and enumerates again. */
   rescan(): Promise<void>;
   zoomRange(): { min: number; max: number; step: number } | null;
   setZoom(value: number): Promise<void>;
+  applyConstraints(constraints: MediaTrackConstraints): Promise<void>;
+  torchSupported(): boolean;
+  torchOn(): boolean;
+  setTorch(on: boolean): Promise<void>;
 }
 
 export interface ReadOptions {
@@ -50,8 +56,10 @@ export interface ReadOptions {
    * ~925 KB dependency in this entry point and in every project that imports it.
    */
   decode: FrameDecoder;
-  /** Camera to open first. Falls back to environment-facing when absent or gone. */
+  /** Camera to open first. Falls back to environment-facing when absent. */
   deviceId?: string;
+  /** Extra constraints merged into every getUserMedia call. */
+  videoConstraints?: MediaTrackConstraints;
 }
 
 /** Decode at most this wide; more pixels cost time without adding detail. */
@@ -76,6 +84,43 @@ function describe(device: MediaDeviceInfo, index: number): CameraDevice {
   return { deviceId: device.deviceId, label: device.label || fallback, facing, groupId: device.groupId };
 }
 
+/** Remove the caller's device selection so it cannot conflict with ours. */
+function withoutSelection(constraints: MediaTrackConstraints): MediaTrackConstraints {
+  const copy = { ...constraints };
+  delete copy.deviceId;
+  delete copy.facingMode;
+  return copy;
+}
+
+type CameraFailureCode =
+  | 'CAMERA_PERMISSION_DENIED'
+  | 'CAMERA_NOT_FOUND'
+  | 'CAMERA_IN_USE'
+  | 'CAMERA_UNAVAILABLE'
+  | 'CAMERA_CONSTRAINTS_FAILED';
+
+const FAILURE_CODES: Record<string, CameraFailureCode> = {
+  NotAllowedError: 'CAMERA_PERMISSION_DENIED',
+  NotFoundError: 'CAMERA_NOT_FOUND',
+  NotReadableError: 'CAMERA_IN_USE',
+  OverconstrainedError: 'CAMERA_CONSTRAINTS_FAILED',
+};
+
+const FAILURE_MESSAGES: Partial<Record<CameraFailureCode, string>> = {
+  CAMERA_PERMISSION_DENIED: 'Camera permission denied. Allow access and try again.',
+  CAMERA_NOT_FOUND: 'No camera was found on this device.',
+  CAMERA_IN_USE: 'The camera is in use by another app.',
+  CAMERA_CONSTRAINTS_FAILED: 'The requested camera constraints could not be satisfied.',
+};
+
+/** Map a getUserMedia/setup failure onto the stable camera codes. */
+function toCameraError(cause: unknown, unavailableMessage: string): CameraError {
+  if (cause instanceof CameraError) return cause;
+  const name = cause instanceof DOMException ? cause.name : '';
+  const code = FAILURE_CODES[name] ?? 'CAMERA_UNAVAILABLE';
+  return new CameraError(code, FAILURE_MESSAGES[code] ?? unavailableMessage, { cause });
+}
+
 /**
  * Read a QR stream from a camera.
  *
@@ -89,7 +134,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (context === null) throw new Error('2d context unavailable for decoding');
+  if (context === null) throw new CameraError('CAMERA_UNAVAILABLE', '2d context unavailable for decoding');
 
   let stream: MediaStream | null = null;
   let tracks: CameraDevice[] = [];
@@ -101,17 +146,18 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
   let timerHandle: ReturnType<typeof setTimeout> | 0 = 0;
   let decoding = false;
   let symbolHandler: ((bytes: Uint8Array) => void) | null = null;
-  let errorHandler: ((error: string) => void) | null = null;
+  let errorHandler: ((error: QrStreamError) => void) | null = null;
   let consecutiveFailures = 0;
   let reportedDecodeFailure = false;
+  let torchState = false;
 
-  const report = (message: string): void => errorHandler?.(message);
+  const report = (error: QrStreamError): void => errorHandler?.(error);
+
+  const baseConstraints = (): MediaTrackConstraints => ({ ...(options.videoConstraints ?? {}) });
 
   const enumerate = async (): Promise<CameraDevice[]> => {
     const all = await navigator.mediaDevices.enumerateDevices();
-    tracks = all
-      .filter((device) => device.kind === 'videoinput')
-      .map((device, index) => describe(device, index));
+    tracks = all.filter((device) => device.kind === 'videoinput').map((device, index) => describe(device, index));
     return tracks;
   };
 
@@ -120,6 +166,7 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     const myGeneration = openGeneration;
     for (const track of stream?.getTracks() ?? []) track.stop();
     stream = null;
+    active = null;
     const next = await navigator.mediaDevices.getUserMedia(constraints);
     // stop() or a newer open() may have won while getUserMedia was pending.
     // Install nothing and release the tracks we just acquired.
@@ -131,8 +178,9 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     video.srcObject = next;
     await video.play().catch(() => undefined);
 
-    const settings = next.getVideoTracks()[0]?.getSettings();
+    const settings = next.getVideoTracks()[0]?.getSettings() as (MediaTrackSettings & { torch?: boolean }) | undefined;
     active = settings?.deviceId ?? active;
+    torchState = settings?.torch === true;
     if (active) {
       try {
         localStorage.setItem(STORAGE_KEY, active);
@@ -142,6 +190,10 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     }
     await enumerate();
     return next;
+  };
+
+  const openDevice = async (id: string): Promise<void> => {
+    await open({ video: { ...withoutSelection(baseConstraints()), deviceId: { exact: id } } });
   };
 
   const openPreferred = async (): Promise<void> => {
@@ -154,17 +206,20 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
     if (remembered) {
       try {
-        await open({ video: { deviceId: { exact: remembered } } });
+        await openDevice(remembered);
         return;
       } catch {
         // The saved camera is gone; fall through to the default.
       }
     }
 
+    const base = baseConstraints();
     try {
-      await open({ video: { facingMode: { ideal: 'environment' } } });
+      await open({
+        video: { ...withoutSelection(base), facingMode: base.facingMode ?? { ideal: 'environment' } },
+      });
     } catch {
-      await open({ video: true });
+      await open({ video: base });
     }
   };
 
@@ -196,9 +251,9 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
       if (consecutiveFailures === 60 && !reportedDecodeFailure) {
         reportedDecodeFailure = true;
         report(
-          failure instanceof Error
-            ? `Decoding is not working (${failure.message}). Check the decoder you passed in.`
-            : 'Decoding is not working. Check the decoder you passed in.',
+          failure instanceof DecoderError
+            ? failure
+            : new DecoderError('Decoding is not working. Check the decoder you passed in.', { cause: failure }),
         );
       }
     } finally {
@@ -220,16 +275,19 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
   };
 
   const handleDeviceChange = (): void => {
-    void enumerate();
+    void enumerate().catch((cause: unknown) => {
+      report(toCameraError(cause, 'The camera list could not be refreshed.'));
+    });
   };
 
   const select = async (id: string): Promise<void> => {
     try {
-      await open({ video: { deviceId: { exact: id } } });
-    } catch {
+      await openDevice(id);
+    } catch (cause) {
       if (stopped) return;
-      report('That camera could not be opened. Falling back to the default camera.');
-      await open({ video: { facingMode: { ideal: 'environment' } } });
+      const error = toCameraError(cause, 'That camera could not be opened.');
+      report(error);
+      throw error;
     }
   };
 
@@ -252,18 +310,33 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
         // A decoder teardown failure must not mask the original error.
       }
     }
-    report(
-      error instanceof DOMException && error.name === 'NotAllowedError'
-        ? 'Camera permission denied. Allow camera access and reload.'
-        : 'No camera available.',
-    );
-    throw error;
+    throw toCameraError(error, 'The camera could not be opened.');
   }
 
   navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
 
-
   schedule();
+
+  const shutdown = (): void => {
+    stopped = true;
+    openGeneration += 1;
+    cancelAnimationFrame(frameHandle);
+    if (timerHandle) clearTimeout(timerHandle);
+    for (const track of stream?.getTracks() ?? []) track.stop();
+    stream = null;
+    active = null;
+    torchState = false;
+    video.srcObject = null;
+    navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    if (!disposed) {
+      disposed = true;
+      try {
+        options.decode.dispose?.();
+      } catch {
+        // A decoder teardown failure must not keep the camera alive.
+      }
+    }
+  };
 
   return {
     devices: () => tracks,
@@ -297,12 +370,16 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
     async rescan(): Promise<void> {
       // Some Android builds only reveal secondary rear cameras once a stream
       // has actually been opened and enumerated again.
-      const previous = active;
-      await open(
-        previous
-          ? { video: { deviceId: { exact: previous } } }
-          : { video: { facingMode: { ideal: 'environment' } } },
-      );
+      try {
+        if (active) await openDevice(active);
+        else await openPreferred();
+      } catch (cause) {
+        if (stopped) return;
+        const error = toCameraError(cause, 'The camera could not be reopened.');
+        report(error);
+        shutdown();
+        throw error;
+      }
     },
 
     zoomRange() {
@@ -314,39 +391,75 @@ export async function readQrStream(options: ReadOptions): Promise<CameraControll
 
     async setZoom(value: number): Promise<void> {
       const track = stream?.getVideoTracks()[0];
-      if (!track) return;
+      if (!track) {
+        const error = new CameraError('CAMERA_UNAVAILABLE', 'There is no camera to zoom.');
+        report(error);
+        throw error;
+      }
       try {
         // `zoom` is a Chrome extension, absent from the DOM constraint types.
         await track.applyConstraints({ advanced: [{ zoom: value } as unknown as MediaTrackConstraintSet] });
-      } catch {
-        report('This camera does not accept a zoom setting.');
+      } catch (cause) {
+        const error = new CameraError('CAMERA_CONSTRAINTS_FAILED', 'This camera does not accept a zoom setting.', {
+          cause,
+        });
+        report(error);
+        throw error;
+      }
+    },
+
+    async applyConstraints(constraints: MediaTrackConstraints): Promise<void> {
+      const track = stream?.getVideoTracks()[0];
+      if (!track) {
+        const error = new CameraError('CAMERA_UNAVAILABLE', 'There is no camera to configure.');
+        report(error);
+        throw error;
+      }
+      try {
+        await track.applyConstraints(constraints);
+      } catch (cause) {
+        const error = new CameraError('CAMERA_CONSTRAINTS_FAILED', 'The camera rejected the requested constraints.', {
+          cause,
+        });
+        report(error);
+        throw error;
+      }
+    },
+
+    torchSupported(): boolean {
+      const track = stream?.getVideoTracks()[0];
+      return (track?.getCapabilities() as CameraCapabilities | undefined)?.torch === true;
+    },
+
+    torchOn: () => torchState,
+
+    async setTorch(on: boolean): Promise<void> {
+      const track = stream?.getVideoTracks()[0];
+      if (!track || (track.getCapabilities() as CameraCapabilities | undefined)?.torch !== true) {
+        const error = new CameraError('TORCH_UNSUPPORTED', 'This camera does not support the torch.');
+        report(error);
+        throw error;
+      }
+      try {
+        // `torch` is a Chrome extension, absent from the DOM constraint types.
+        await track.applyConstraints({ advanced: [{ torch: on } as unknown as MediaTrackConstraintSet] });
+        torchState = on;
+      } catch (cause) {
+        const error = new CameraError('CAMERA_CONSTRAINTS_FAILED', 'The torch could not be changed.', { cause });
+        report(error);
+        throw error;
       }
     },
 
     stop(): void {
-      stopped = true;
-      openGeneration += 1;
-      cancelAnimationFrame(frameHandle);
-      if (timerHandle) clearTimeout(timerHandle);
-      for (const track of stream?.getTracks() ?? []) track.stop();
-      stream = null;
-      video.srcObject = null;
-      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-      if (!disposed) {
-        disposed = true;
-        try {
-          options.decode.dispose?.();
-        } catch {
-          // A decoder teardown failure must not keep the camera alive.
-        }
-      }
+      shutdown();
     },
 
     onSymbol(callback: (bytes: Uint8Array) => void): void {
       symbolHandler = callback;
     },
 
-    onError(callback: (error: string) => void): void {
+    onError(callback: (error: QrStreamError) => void): void {
       errorHandler = callback;
     },
   };

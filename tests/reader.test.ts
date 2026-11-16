@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
+import { WrongKeyError } from '../src/core/errors';
+import { decodePacket, encodePacket } from '../src/core/packet';
 import { createQrStreamReader } from '../src/core/reader';
 import { createQrStreamWriter } from '../src/core/writer';
-import { decodePacket, encodePacket } from '../src/core/packet';
-import { WrongKeyError } from '../src/core/crypto';
 
 async function collect(writer: Awaited<ReturnType<typeof createQrStreamWriter>>, count: number) {
   const out: Uint8Array[] = [];
@@ -51,9 +51,7 @@ describe('createQrStreamReader', () => {
 
     const result = await reader.result();
     expect(result).not.toBeNull();
-    expect(new TextDecoder().decode((result as { data: Uint8Array }).data)).toBe(
-      new TextDecoder().decode(json),
-    );
+    expect(new TextDecoder().decode((result as { data: Uint8Array }).data)).toBe(new TextDecoder().decode(json));
     expect((result as { meta: { filename: string } }).meta.filename).toBe('data.json');
   });
 
@@ -71,9 +69,7 @@ describe('createQrStreamReader', () => {
 
     const retried = await reader.result('blue seven kilo');
     expect(retried).not.toBeNull();
-    expect(new TextDecoder().decode((retried as { data: Uint8Array }).data)).toBe(
-      new TextDecoder().decode(json),
-    );
+    expect(new TextDecoder().decode((retried as { data: Uint8Array }).data)).toBe(new TextDecoder().decode(json));
   });
 
   test('reset forgets the session', async () => {
@@ -108,7 +104,7 @@ describe('createQrStreamReader', () => {
     reader.add(encodePacket({ ...head, payload }));
 
     for (const p of packets.slice(1)) reader.add(p);
-    await expect(reader.result()).rejects.toBeTruthy();
+    await expect(reader.result()).rejects.toMatchObject({ code: 'PAYLOAD_CORRUPT', recovery: 'rescan' });
   });
 
   test('tampering with an encrypted filename fails authentication', async () => {
@@ -160,5 +156,27 @@ describe('createQrStreamReader', () => {
     const pending = reader.result('blue seven kilo');
     reader.reset();
     await expect(pending).resolves.toBeNull();
+  });
+
+  test('the default reader accepts a payload above the legacy 1 MiB cap', async () => {
+    const record = { name: 'repeated row', values: [1, 2, 3] };
+    const size = JSON.stringify(record).length;
+    const payload = new TextEncoder().encode(
+      JSON.stringify({ rows: Array.from({ length: Math.ceil(1_100_000 / size) }, () => record) }),
+    );
+    expect(payload.length).toBeGreaterThan(1024 * 1024);
+
+    const writer = await createQrStreamWriter(payload, { filename: 'large.json', preset: 'fast' });
+    const reader = createQrStreamReader();
+    let emitted = 0;
+    for await (const packet of writer.packets()) {
+      reader.add(packet);
+      if (reader.progress().solved === writer.k) break;
+      emitted += 1;
+      if (emitted > writer.k * 20) break;
+    }
+
+    const result = await reader.result();
+    expect(result?.data.length).toBe(payload.length);
   });
 });

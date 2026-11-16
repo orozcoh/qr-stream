@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minimal sender — qr-stream</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <p class="crumbs"><a href="./">examples</a></p>
+      <h1>Minimal sender</h1>
+      <p>Choose a file, press start, and point the receiver at the screen. Stop clears the last frame.</p>
+
+      <label class="field">File <input id="file" type="file" /></label>
+
+      <div class="stage"><canvas id="qr" role="img" aria-label="QR stream"></canvas></div>
+
+      <div class="actions">
+        <button id="start" type="button" disabled>Start</button>
+        <button id="stop" type="button" disabled>Stop</button>
+      </div>
+
+      <p id="status" class="status" role="status"></p>
+      <pre id="error" class="error" role="alert"></pre>
+
+      <script type="module" src="/src/sender.ts"></script>
+    </main>
+  </body>
+</html>

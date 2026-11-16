@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>qr-stream examples</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>qr-stream examples</h1>
+      <p>
+        Three small, real uses of the public API. Run them with
+        <code>pnpm examples:build</code> and serve <code>examples/dist/</code> over HTTPS or localhost.
+      </p>
+      <ul class="links">
+        <li><a href="./sender.html">Minimal sender</a> — writer plus animated canvas.</li>
+        <li><a href="./receiver.html">Minimal receiver</a> — camera, ZXing decoder, fountain reader.</li>
+        <li><a href="./hooks.html">React hooks</a> — <code>useQrStreamWriter</code> and the camera/reader hooks.</li>
+      </ul>
+      <p class="note">
+        Every page imports <code>@orozcoh/qr-stream</code> entries that this Vite config aliases to <code>src/</code>. A
+        published host imports the package instead; nothing else changes.
+      </p>
+    </main>
+  </body>
+</html>

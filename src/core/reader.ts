@@ -1,12 +1,22 @@
-import { MAX_FRAME_PAYLOAD, qrCapacity } from './capacity';
-import { gunzip } from './compress';
-import { NONCE_BYTES, SALT_BYTES, decryptBytes } from './crypto';
-import { FountainDecoder } from './fountain';
-import { decodeMeta, readVarint, type StreamMeta } from './meta';
-import { FLAG_ENCRYPTED, FLAG_GZIP, decodePacket } from './packet';
-import { FRAME_OVERHEAD, MAX_INPUT_BYTES, PRESETS } from './types';
+import { MAX_FRAME_PAYLOAD, qrCapacity } from './capacity.js';
+import { gunzip } from './compress.js';
+import { NONCE_BYTES, SALT_BYTES, decryptBytes } from './crypto.js';
+import { PayloadTooLargeError, QrStreamError } from './errors.js';
+import { FountainDecoder } from './fountain.js';
+import { GCM_TAG_BYTES, MAX_META_OVERHEAD, resolveReaderLimits } from './limits.js';
+import { decodeMeta, readVarint, type StreamMeta } from './meta.js';
+import { FLAG_ENCRYPTED, FLAG_GZIP, decodePacket } from './packet.js';
+import { FRAME_OVERHEAD, MAX_WIRE_BYTES, PRESETS, type ReaderLimits } from './types.js';
 
 export type AddResult = 'accepted' | 'duplicate' | 'stale-session' | 'invalid';
+
+export interface QrStreamReaderOptions {
+  /**
+   * Transfer budgets for this reader instance. Initial configuration: a
+   * change on a later render does not rebuild an in-progress reader.
+   */
+  limits?: ReaderLimits;
+}
 
 export interface QrStreamReader {
   /** The session this reader has locked onto, or null before the first frame. */
@@ -19,11 +29,9 @@ export interface QrStreamReader {
   result(passphrase?: string): Promise<{ data: Uint8Array; meta: StreamMeta } | null>;
 }
 
-const GCM_TAG_BYTES = 16;
 const WIRE_VERSION = 1;
 const RESERVED_FLAGS = ~(FLAG_GZIP | FLAG_ENCRYPTED) & 0xff;
 const MAX_KDF_ITERATIONS = 2_000_000;
-const MAX_META_OVERHEAD = 256;
 
 /**
  * The writer caps a frame at `qrCapacity(version) - FRAME_OVERHEAD`. The
@@ -34,42 +42,68 @@ const MAX_BLOCK_SIZE = MAX_FRAME_PAYLOAD - FRAME_OVERHEAD;
 const MIN_PRESET_BLOCK_SIZE = qrCapacity(PRESETS.fast.version) - FRAME_OVERHEAD;
 
 /**
- * The largest payload a legal 1 MiB transfer can produce, including metadata,
- * the varint prefix, and the GCM tag. `k * blockSize` is checked against this
- * plus one block of zero padding.
+ * The largest payload a legal default transfer can produce, including
+ * metadata, the varint prefix, and the GCM tag. Derived from the hard wire
+ * ceiling, never from a caller-lowered reader limit.
  */
-const MAX_STREAM_BYTES = MAX_INPUT_BYTES + MAX_META_OVERHEAD + GCM_TAG_BYTES;
+const MAX_STREAM_BYTES = MAX_WIRE_BYTES + MAX_META_OVERHEAD + GCM_TAG_BYTES;
 
 /**
  * Largest source-block count a legal stream can declare. At the smallest
  * preset a 1 MiB transfer needs ~1252 blocks; accepting the u16 limit (65535)
  * lets a 21-byte frame drive the fountain decoder's superlinear work.
+ *
+ * @internal
  */
 export const MAX_SOURCE_BLOCKS = Math.ceil(MAX_STREAM_BYTES / MIN_PRESET_BLOCK_SIZE);
 
-async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+/** Fail before a crypto call that would otherwise surface an opaque TypeError. */
+function requireWebCrypto(): Crypto {
+  const api = (globalThis as { crypto?: Crypto }).crypto;
+  if (!api?.subtle) {
+    throw new QrStreamError(
+      'UNSUPPORTED_RUNTIME',
+      'Web Crypto is not available; use a secure context in a modern browser',
+      {
+        recovery: 'upgrade-browser',
+      },
+    );
+  }
+  return api;
+}
+
+async function sha256(api: Crypto, bytes: Uint8Array): Promise<Uint8Array> {
+  try {
+    return new Uint8Array(await api.subtle.digest('SHA-256', bytes as BufferSource));
+  } catch (cause) {
+    throw new QrStreamError('CRYPTO_FAILED', 'failed to hash the payload', { cause, recovery: 'retry' });
+  }
 }
 
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean =>
   a.length === b.length && a.every((value, index) => value === b[index]);
 
 /** Everything a peer frame claims about the stream, checked before we trust it. */
-function isPlausible(packet: {
-  version: number;
-  flags: number;
-  k: number;
-  blockSize: number;
-  payload: Uint8Array;
-}): boolean {
+function isPlausible(
+  packet: {
+    version: number;
+    flags: number;
+    k: number;
+    blockSize: number;
+    payload: Uint8Array;
+  },
+  maxWireBytes: number,
+): boolean {
   if (packet.version !== WIRE_VERSION) return false;
   if ((packet.flags & RESERVED_FLAGS) !== 0) return false;
   if (packet.k < 1 || packet.k > MAX_SOURCE_BLOCKS) return false;
   if (packet.blockSize < 1 || packet.blockSize > MAX_BLOCK_SIZE) return false;
-  // A legal stream can be at most MAX_STREAM_BYTES of payload, plus the padding
-  // of the final block. This rejects a peer that declares a huge K with a large
-  // blockSize even when each individual field is within its type's range.
-  if (packet.k * packet.blockSize > MAX_STREAM_BYTES + packet.blockSize) return false;
+  // A stream this reader accepts can be at most its wire budget plus metadata
+  // overhead and the tag, plus the padding of the final block. This rejects a
+  // peer that declares a huge K with a large blockSize even when each
+  // individual field is within its type's range.
+  const streamBudget = maxWireBytes + MAX_META_OVERHEAD + GCM_TAG_BYTES + packet.blockSize;
+  if (packet.k * packet.blockSize > streamBudget) return false;
   // The writer always pads to blockSize, so a short payload is malformed even
   // for the final source block. Rejecting it here keeps a later good copy from
   // being swallowed as a duplicate.
@@ -85,7 +119,8 @@ function isPlausible(packet: {
  * ciphertext after a failed decrypt so a mistyped passphrase costs a retype,
  * not another scan.
  */
-export function createQrStreamReader(): QrStreamReader {
+export function createQrStreamReader(options: QrStreamReaderOptions = {}): QrStreamReader {
+  const limits = resolveReaderLimits(options.limits);
   let lockedSession: number | null = null;
   let lockedFlags = 0;
   let lockedK = 0;
@@ -119,24 +154,30 @@ export function createQrStreamReader(): QrStreamReader {
 
     try {
       const { value: metaLen, next } = readVarint(bytes, 0);
-      if (metaLen > bytes.length - next) throw new RangeError('metadata length exceeds payload');
+      if (metaLen > bytes.length - next) {
+        throw new QrStreamError('INVALID_METADATA', 'metadata length exceeds payload', { recovery: 'rescan' });
+      }
       const parsed = decodeMeta(bytes.subarray(next, next + metaLen));
 
-      if (parsed.plainLen > MAX_INPUT_BYTES) throw new RangeError('advertised size exceeds the limit');
-      if (parsed.iterations > MAX_KDF_ITERATIONS) throw new RangeError('absurd KDF iteration count');
+      if (parsed.plainLen > limits.maxDecodedBytes) {
+        throw new PayloadTooLargeError('decoded', parsed.plainLen, limits.maxDecodedBytes);
+      }
+      if (parsed.iterations > MAX_KDF_ITERATIONS) {
+        throw new QrStreamError('INVALID_METADATA', 'absurd KDF iteration count', { recovery: 'rescan' });
+      }
 
       const bodyLen = bytes.length - next - metaLen;
       const encrypted = (lockedFlags & FLAG_ENCRYPTED) !== 0;
       const requiredWire = parsed.wireLen + (encrypted ? GCM_TAG_BYTES : 0);
-      if (requiredWire > bodyLen) throw new RangeError('wire length exceeds payload');
+      if (requiredWire > bodyLen) {
+        throw new QrStreamError('PAYLOAD_CORRUPT', 'wire length exceeds payload', { recovery: 'rescan' });
+      }
 
       if (encrypted) {
-        if (
-          parsed.salt?.length !== SALT_BYTES ||
-          parsed.nonce?.length !== NONCE_BYTES ||
-          parsed.iterations < 1
-        ) {
-          throw new RangeError('invalid encryption parameters in metadata');
+        if (parsed.salt?.length !== SALT_BYTES || parsed.nonce?.length !== NONCE_BYTES || parsed.iterations < 1) {
+          throw new QrStreamError('INVALID_METADATA', 'invalid encryption parameters in metadata', {
+            recovery: 'rescan',
+          });
         }
       }
 
@@ -159,7 +200,7 @@ export function createQrStreamReader(): QrStreamReader {
     add(packetBytes: Uint8Array): AddResult {
       const packet = decodePacket(packetBytes);
       if (packet === null) return 'invalid';
-      if (!isPlausible(packet)) return 'invalid';
+      if (!isPlausible(packet, limits.maxWireBytes)) return 'invalid';
 
       if (lockedSession === null) {
         lockedSession = packet.sessionId;
@@ -192,6 +233,7 @@ export function createQrStreamReader(): QrStreamReader {
       if (assembled === null || meta === null) return null;
       if (cachedResult !== null) return cachedResult;
 
+      const api = requireWebCrypto();
       const myGeneration = generation;
       const parsed = meta;
       const bytes = assembled;
@@ -215,18 +257,28 @@ export function createQrStreamReader(): QrStreamReader {
         wire = body.subarray(0, parsed.wireLen);
       }
 
-      const data = (lockedFlags & FLAG_GZIP) !== 0 ? await gunzip(wire) : wire;
+      const data = (lockedFlags & FLAG_GZIP) !== 0 ? await gunzip(wire, limits.maxDecodedBytes) : wire;
       if (generation !== myGeneration) return null;
 
-      if (data.length > MAX_INPUT_BYTES) throw new RangeError('decoded payload exceeds the size limit');
+      if (data.length > limits.maxDecodedBytes) {
+        throw new PayloadTooLargeError('decoded', data.length, limits.maxDecodedBytes);
+      }
       if (data.length !== parsed.plainLen) {
-        throw new RangeError('decoded length does not match metadata plainLen');
+        throw new QrStreamError('PAYLOAD_CORRUPT', 'decoded length does not match metadata plainLen', {
+          recovery: 'rescan',
+        });
       }
 
-      const digest = await sha256(data);
+      const digest = await sha256(api, data);
       if (generation !== myGeneration) return null;
       if (!sameBytes(digest, parsed.sha256)) {
-        throw new Error('payload checksum mismatch: the transfer is corrupt, scan it again');
+        throw new QrStreamError(
+          'PAYLOAD_CORRUPT',
+          'payload checksum mismatch: the transfer is corrupt, scan it again',
+          {
+            recovery: 'rescan',
+          },
+        );
       }
 
       cachedResult = { data, meta: parsed };

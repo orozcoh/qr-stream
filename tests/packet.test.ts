@@ -1,13 +1,6 @@
 import { describe, expect, test } from 'vitest';
+import { FLAG_ENCRYPTED, FLAG_GZIP, MAGIC, decodePacket, encodePacket, type Packet } from '../src/core/packet';
 import { HEADER_SIZE } from '../src/core/types';
-import {
-  FLAG_ENCRYPTED,
-  FLAG_GZIP,
-  MAGIC,
-  decodePacket,
-  encodePacket,
-  type Packet,
-} from '../src/core/packet';
 
 const sample = (overrides: Partial<Packet> = {}): Packet => ({
   version: 1,

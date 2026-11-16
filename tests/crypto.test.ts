@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { WrongKeyError, decryptBytes, encryptBytes } from '../src/core/crypto';
+import { decryptBytes, encryptBytes } from '../src/core/crypto';
+import { WrongKeyError } from '../src/core/errors';
 
 const ITERATIONS = 1000;
 
@@ -30,9 +31,9 @@ describe('encryption', () => {
     const sealed = await encryptBytes(new Uint8Array([1, 2, 3]), 'right', ITERATIONS);
     const corrupted = new Uint8Array(sealed.ciphertext);
     corrupted[0] = (corrupted[0] ?? 0) ^ 0xff;
-    await expect(
-      decryptBytes(corrupted, 'right', sealed.salt, sealed.nonce, sealed.iterations),
-    ).rejects.toBeInstanceOf(WrongKeyError);
+    await expect(decryptBytes(corrupted, 'right', sealed.salt, sealed.nonce, sealed.iterations)).rejects.toBeInstanceOf(
+      WrongKeyError,
+    );
   });
 
   test('passphrase is trimmed and NFC-normalised', async () => {
@@ -58,14 +59,7 @@ describe('encryption', () => {
       decryptBytes(sealed.ciphertext, 'right', sealed.salt, sealed.nonce, sealed.iterations, tampered),
     ).rejects.toBeInstanceOf(WrongKeyError);
 
-    const opened = await decryptBytes(
-      sealed.ciphertext,
-      'right',
-      sealed.salt,
-      sealed.nonce,
-      sealed.iterations,
-      aad,
-    );
+    const opened = await decryptBytes(sealed.ciphertext, 'right', sealed.salt, sealed.nonce, sealed.iterations, aad);
     expect(Array.from(opened)).toEqual([1, 2, 3]);
   });
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { readQrStream } from '../src/browser/camera';
+import { readQrStream, type CameraCapabilities } from '../src/browser/camera';
+import type { QrStreamError } from '../src/core/errors';
 
 function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(reason?: unknown): void } {
   let resolve!: (value: T) => void;
@@ -11,22 +12,71 @@ function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(r
   return { promise, resolve, reject };
 }
 
-function fakeTrack(deviceId: string, stop: () => void) {
+interface FakeTrackOptions {
+  capabilities?: CameraCapabilities;
+  applyConstraints?: (constraints: MediaTrackConstraints) => Promise<void>;
+}
+
+function fakeTrack(deviceId: string, stop: () => void, options: FakeTrackOptions = {}) {
   return {
     stop,
     getSettings: () => ({ deviceId }),
-    getCapabilities: () => ({}),
+    getCapabilities: () => options.capabilities ?? {},
     label: deviceId,
-    applyConstraints: async () => undefined,
+    applyConstraints: vi.fn(options.applyConstraints ?? (async () => undefined)),
   };
 }
 
-function fakeStream(track: ReturnType<typeof fakeTrack>): MediaStream {
+type FakeTrack = ReturnType<typeof fakeTrack>;
+
+function fakeStream(track: FakeTrack): MediaStream {
   return {
     getTracks: () => [track],
     getVideoTracks: () => [track],
   } as unknown as MediaStream;
 }
+
+interface FakeCameraOptions {
+  media?(constraints: MediaStreamConstraints): Promise<MediaStream>;
+  remembered?: string | null;
+  devices?: MediaDeviceInfo[];
+}
+
+/** Stubs the DOM surface `readQrStream` touches, plus getUserMedia. */
+function stubCamera(options: FakeCameraOptions = {}) {
+  const video = {
+    srcObject: null,
+    videoWidth: 640,
+    videoHeight: 480,
+    play: async () => undefined,
+    requestVideoFrameCallback: () => 0,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  } as unknown as HTMLVideoElement;
+
+  const context = {
+    drawImage: () => undefined,
+    getImageData: () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 }),
+  };
+  const canvas = { width: 0, height: 0, getContext: () => context };
+
+  vi.stubGlobal('document', { createElement: () => canvas });
+  vi.stubGlobal('localStorage', { getItem: () => options.remembered ?? null, setItem: () => undefined });
+  vi.stubGlobal('cancelAnimationFrame', () => undefined);
+
+  const getUserMedia = vi.fn(options.media ?? (async () => fakeStream(fakeTrack('cam-1', () => undefined))));
+  const mediaDevices = {
+    getUserMedia,
+    enumerateDevices: vi.fn(async () => options.devices ?? []),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  };
+  vi.stubGlobal('navigator', { mediaDevices });
+
+  return { video, mediaDevices, getUserMedia };
+}
+
+const silentDecoder = { decode: async () => null };
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -35,25 +85,7 @@ afterEach(() => {
 
 describe('camera lifecycle', () => {
   test('stop during an in-flight switch releases the new track and disposes the decoder', async () => {
-    const video = {
-      srcObject: null,
-      videoWidth: 0,
-      videoHeight: 0,
-      play: async () => undefined,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-    } as unknown as HTMLVideoElement;
-
-    const context = {
-      drawImage: () => undefined,
-      getImageData: () => ({ data: new Uint8ClampedArray(0), width: 0, height: 0 }),
-    };
-    const canvas = { width: 0, height: 0, getContext: () => context };
-
-    vi.stubGlobal('document', { createElement: () => canvas });
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
-    vi.stubGlobal('cancelAnimationFrame', () => undefined);
-
+    const { video } = stubCamera({ remembered: null });
     const firstStop = vi.fn();
     const secondStop = vi.fn();
     const first = fakeStream(fakeTrack('cam-1', firstStop));
@@ -66,13 +98,12 @@ describe('camera lifecycle', () => {
         calls += 1;
         return calls === 1 ? first : secondGate.promise;
       }),
-      enumerateDevices: vi.fn(async () => [
-        { kind: 'videoinput', deviceId: 'cam-1', label: 'cam-1', groupId: 'g1' },
-      ]),
+      enumerateDevices: vi.fn(async () => [{ kind: 'videoinput', deviceId: 'cam-1', label: 'cam-1', groupId: 'g1' }]),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     };
     vi.stubGlobal('navigator', { mediaDevices });
+    void video;
 
     const dispose = vi.fn();
     const controller = await readQrStream({
@@ -91,16 +122,7 @@ describe('camera lifecycle', () => {
   });
 
   test('releases the stream when setup fails after acquisition', async () => {
-    const context = {
-      drawImage: () => undefined,
-      getImageData: () => ({ data: new Uint8ClampedArray(0), width: 0, height: 0 }),
-    };
-    const canvas = { width: 0, height: 0, getContext: () => context };
-
-    vi.stubGlobal('document', { createElement: () => canvas });
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined });
-    vi.stubGlobal('cancelAnimationFrame', () => undefined);
-
+    const { video } = stubCamera();
     const firstStop = vi.fn();
     const secondStop = vi.fn();
     const first = fakeStream(fakeTrack('cam-1', firstStop));
@@ -124,10 +146,284 @@ describe('camera lifecycle', () => {
         video: null as unknown as HTMLVideoElement,
         decode: { decode: async () => null, dispose },
       }),
-    ).rejects.toBeTruthy();
+    ).rejects.toMatchObject({ code: 'CAMERA_UNAVAILABLE' });
 
     expect(calls).toBe(2);
     expect(secondStop).toHaveBeenCalled();
     expect(dispose).toHaveBeenCalledTimes(1);
+    void video;
+  });
+});
+
+describe('camera constraints', () => {
+  test('applies the caller video constraints on every open', async () => {
+    const { video, getUserMedia } = stubCamera();
+    const controller = await readQrStream({
+      video,
+      decode: silentDecoder,
+      videoConstraints: { width: { ideal: 1920 } },
+    });
+
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      video: { width: { ideal: 1920 }, facingMode: { ideal: 'environment' } },
+    });
+
+    await controller.select('cam-2');
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      video: { width: { ideal: 1920 }, deviceId: { exact: 'cam-2' } },
+    });
+    controller.stop();
+  });
+
+  test('select overrides deviceId without keeping a conflicting facingMode', async () => {
+    const { video, getUserMedia } = stubCamera();
+    const controller = await readQrStream({
+      video,
+      decode: silentDecoder,
+      videoConstraints: { width: { ideal: 1920 }, facingMode: { exact: 'environment' } },
+    });
+
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      video: { width: { ideal: 1920 }, facingMode: { exact: 'environment' } },
+    });
+
+    await controller.select('cam-2');
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      video: { width: { ideal: 1920 }, deviceId: { exact: 'cam-2' } },
+    });
+    controller.stop();
+  });
+
+  test('opens the remembered device without a conflicting caller facingMode', async () => {
+    const { video, getUserMedia } = stubCamera({ remembered: 'cam-old' });
+    const controller = await readQrStream({
+      video,
+      decode: silentDecoder,
+      videoConstraints: { facingMode: { exact: 'environment' } },
+    });
+
+    expect(getUserMedia).toHaveBeenNthCalledWith(1, { video: { deviceId: { exact: 'cam-old' } } });
+    controller.stop();
+  });
+
+  test('applyConstraints forwards constraints and rejects when the track refuses them', async () => {
+    const track = fakeTrack('cam-1', () => undefined);
+    const { video } = stubCamera({ media: async () => fakeStream(track) });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+
+    await controller.applyConstraints({ width: { ideal: 640 } });
+    expect(track.applyConstraints).toHaveBeenCalledWith({ width: { ideal: 640 } });
+
+    track.applyConstraints.mockRejectedValueOnce(new DOMException('no', 'OverconstrainedError'));
+    await expect(controller.applyConstraints({ width: { ideal: 4000 } })).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_CONSTRAINTS_FAILED',
+      cause: expect.any(DOMException),
+    });
+    controller.stop();
+  });
+});
+
+describe('camera torch', () => {
+  test('setTorch applies the advanced constraint when supported', async () => {
+    const track = fakeTrack('cam-1', () => undefined, { capabilities: { torch: true } });
+    const { video } = stubCamera({ media: async () => fakeStream(track) });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+
+    expect(controller.torchSupported()).toBe(true);
+    expect(controller.torchOn()).toBe(false);
+
+    await controller.setTorch(true);
+    expect(track.applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] });
+    expect(controller.torchOn()).toBe(true);
+
+    await controller.setTorch(false);
+    expect(controller.torchOn()).toBe(false);
+    controller.stop();
+  });
+
+  test('setTorch rejects TORCH_UNSUPPORTED when the track has no torch', async () => {
+    const { video } = stubCamera();
+    const controller = await readQrStream({ video, decode: silentDecoder });
+    const errors: QrStreamError[] = [];
+    controller.onError((error) => errors.push(error));
+
+    await expect(controller.setTorch(true)).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'TORCH_UNSUPPORTED',
+      recovery: 'none',
+    });
+
+    expect(errors.map((error) => error.code)).toEqual(['TORCH_UNSUPPORTED']);
+    expect(controller.torchOn()).toBe(false);
+    controller.stop();
+  });
+});
+
+describe('camera errors', () => {
+  test('permission failure rejects a coded CameraError with cause', async () => {
+    const denied = new DOMException('denied', 'NotAllowedError');
+    const { video } = stubCamera({
+      media: async () => {
+        throw denied;
+      },
+    });
+
+    await expect(readQrStream({ video, decode: silentDecoder })).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_PERMISSION_DENIED',
+      recovery: 'grant-permission',
+      cause: denied,
+    });
+  });
+
+  test.each([
+    ['NotFoundError', 'CAMERA_NOT_FOUND'],
+    ['NotReadableError', 'CAMERA_IN_USE'],
+    ['OverconstrainedError', 'CAMERA_CONSTRAINTS_FAILED'],
+    ['UnknownError', 'CAMERA_UNAVAILABLE'],
+  ])('maps %s to %s with a cause', async (name, code) => {
+    const cause = new DOMException(name, name);
+    const { video } = stubCamera({
+      media: async () => {
+        throw cause;
+      },
+    });
+
+    await expect(readQrStream({ video, decode: silentDecoder })).rejects.toMatchObject({
+      name: 'CameraError',
+      code,
+      recovery: 'change-camera',
+      cause,
+    });
+  });
+
+  test('mutations without a live track reject CAMERA_UNAVAILABLE and report it', async () => {
+    const emptyStream = { getTracks: () => [], getVideoTracks: () => [] } as unknown as MediaStream;
+    const { video } = stubCamera({ media: async () => emptyStream });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+    const errors: QrStreamError[] = [];
+    controller.onError((error) => errors.push(error));
+
+    await expect(controller.setZoom(2)).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_UNAVAILABLE',
+      recovery: 'change-camera',
+    });
+    await expect(controller.applyConstraints({ width: { ideal: 640 } })).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_UNAVAILABLE',
+      recovery: 'change-camera',
+    });
+
+    expect(errors.map((error) => error.code)).toEqual(['CAMERA_UNAVAILABLE', 'CAMERA_UNAVAILABLE']);
+    controller.stop();
+  });
+
+  test('select rejects a coded CameraError and reports it', async () => {
+    const first = fakeStream(fakeTrack('cam-1', () => undefined));
+    let calls = 0;
+    const { video } = stubCamera({
+      media: async () => {
+        calls += 1;
+        if (calls === 1) return first;
+        throw new DOMException('busy', 'NotReadableError');
+      },
+    });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+    const errors: QrStreamError[] = [];
+    controller.onError((error) => errors.push(error));
+
+    await expect(controller.select('cam-2')).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_IN_USE',
+      cause: expect.any(DOMException),
+    });
+    expect(errors.map((error) => error.code)).toEqual(['CAMERA_IN_USE']);
+    expect(controller.activeId()).toBeNull();
+    controller.stop();
+  });
+
+  test('rescan rejects on a failed reopen and leaves the controller stopped', async () => {
+    const stopTrack = vi.fn();
+    const first = fakeStream(fakeTrack('cam-1', stopTrack));
+    let calls = 0;
+    const { video } = stubCamera({
+      media: async () => {
+        calls += 1;
+        if (calls === 1) return first;
+        throw new DOMException('busy', 'NotReadableError');
+      },
+    });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+    expect(controller.diagnostics().active?.deviceId).toBe('cam-1');
+
+    await expect(controller.rescan()).rejects.toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_IN_USE',
+      cause: expect.any(DOMException),
+    });
+
+    expect(stopTrack).toHaveBeenCalled();
+    expect(video.srcObject).toBeNull();
+    expect(controller.activeId()).toBeNull();
+    expect(controller.diagnostics().active).toBeNull();
+  });
+
+  test('setZoom rejects CAMERA_CONSTRAINTS_FAILED and reports the same typed error', async () => {
+    const cause = new DOMException('bad zoom', 'OverconstrainedError');
+    const track = fakeTrack('cam-1', () => undefined, {
+      applyConstraints: async () => {
+        throw cause;
+      },
+    });
+    const { video } = stubCamera({ media: async () => fakeStream(track) });
+    const controller = await readQrStream({ video, decode: silentDecoder });
+    const messages: string[] = [];
+    controller.onError((error) => messages.push(error.message));
+
+    const rejection = (await controller.setZoom(999).catch((error: unknown) => error)) as QrStreamError;
+
+    expect(rejection).toMatchObject({
+      name: 'CameraError',
+      code: 'CAMERA_CONSTRAINTS_FAILED',
+      cause,
+    });
+    expect(messages).toEqual([rejection.message]);
+    controller.stop();
+  });
+
+  test('reports a DecoderError after sixty consecutive decode failures', async () => {
+    const failure = new Error('wasm never loaded');
+    const frame: { current: (() => void) | null } = { current: null };
+    const { video } = stubCamera();
+    (video as unknown as { requestVideoFrameCallback: (callback: () => void) => number }).requestVideoFrameCallback = (
+      callback,
+    ) => {
+      frame.current = callback;
+      return 0;
+    };
+
+    const controller = await readQrStream({
+      video,
+      decode: {
+        decode: async () => {
+          throw failure;
+        },
+      },
+    });
+    const errors: QrStreamError[] = [];
+    controller.onError((error) => errors.push(error));
+
+    for (let index = 0; index < 60; index += 1) {
+      const callback = frame.current;
+      frame.current = null;
+      callback?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ code: 'DECODER_FAILED', cause: failure });
+    controller.stop();
   });
 });

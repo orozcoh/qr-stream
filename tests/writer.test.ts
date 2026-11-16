@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { MAX_INPUT_BYTES, PRESETS } from '../src/core/types';
-import { createQrStreamWriter } from '../src/core/writer';
-import { decodePacket } from '../src/core/packet';
+import { QrStreamError } from '../src/core/errors';
 import { decodeMeta } from '../src/core/meta';
 import { readVarint } from '../src/core/meta';
+import { decodePacket } from '../src/core/packet';
+import { MAX_INPUT_BYTES, MAX_WIRE_BYTES, PRESETS } from '../src/core/types';
+import { createQrStreamWriter } from '../src/core/writer';
 
 function lcg(seed: number): () => number {
   let state = seed >>> 0;
@@ -29,6 +30,35 @@ const take = async <T>(gen: AsyncGenerator<T>, count: number): Promise<T[]> => {
 };
 
 describe('createQrStreamWriter', () => {
+  test('exposes the QR version and preset that produced the stream', async () => {
+    for (const preset of Object.keys(PRESETS) as (keyof typeof PRESETS)[]) {
+      const writer = await createQrStreamWriter(new Uint8Array(100), { filename: 'a.json', preset });
+      expect(writer.preset).toBe(preset);
+      expect(writer.version).toBe(PRESETS[preset].version);
+    }
+  });
+
+  test('exposes plain, wire, and payload sizes', async () => {
+    const writer = await createQrStreamWriter(new Uint8Array(400), { filename: 'a.json', preset: 'fast' });
+    expect(writer.plainBytes).toBe(400);
+    expect(writer.wireBytes).toBeGreaterThan(0);
+    expect(writer.payloadBytes).toBeGreaterThanOrEqual(writer.wireBytes);
+    expect(writer.encrypted).toBe(false);
+  });
+
+  test('wireBytes is the pre-encryption body and payloadBytes carries the tag', async () => {
+    const plain = await createQrStreamWriter(new Uint8Array(400), { filename: 'a.json', preset: 'fast' });
+    const sealed = await createQrStreamWriter(new Uint8Array(400), {
+      filename: 'a.json',
+      preset: 'fast',
+      passphrase: 'seven words here',
+    });
+    expect(sealed.encrypted).toBe(true);
+    expect(sealed.wireBytes).toBe(sealed.meta.wireLen);
+    expect(sealed.payloadBytes).toBeGreaterThan(sealed.wireBytes + 16);
+    expect(plain.wireBytes).toBe(plain.meta.wireLen);
+  });
+
   test('a small payload fits in one block', async () => {
     const writer = await createQrStreamWriter(new Uint8Array(300).fill(65), {
       filename: 'small.json',
@@ -37,6 +67,9 @@ describe('createQrStreamWriter', () => {
     expect(writer.k).toBe(1);
     expect(writer.meta.plainLen).toBe(300);
     expect(writer.meta.filename).toBe('small.json');
+    expect(writer.wireBytes).toBeLessThanOrEqual(MAX_WIRE_BYTES);
+    expect(writer.wireBytes).toBe(writer.meta.wireLen);
+    expect(writer.payloadBytes).toBeGreaterThan(writer.wireBytes);
   });
 
   test('blockSize is capacity minus framing for every preset', async () => {
@@ -62,6 +95,22 @@ describe('createQrStreamWriter', () => {
     expect(meta.sha256.length).toBe(32);
   });
 
+  test('reports the same sanitized, truncated filename the receiver decodes', async () => {
+    const writer = await createQrStreamWriter(noisy(500, 29), {
+      // Path separators are stripped and the UTF-8 byte budget is 64.
+      filename: `${'é'.repeat(40)}/../<report>.json`,
+      preset: 'fast',
+    });
+    const [first] = await take(writer.packets(), 1);
+    const packet = decodePacket(first as Uint8Array) as NonNullable<ReturnType<typeof decodePacket>>;
+    const { value: metaLen, next } = readVarint(packet.payload, 0);
+    const meta = decodeMeta(packet.payload.subarray(next, next + metaLen));
+
+    expect(writer.meta.filename).toBe(meta.filename);
+    expect(new TextEncoder().encode(writer.meta.filename).length).toBeLessThanOrEqual(64);
+    expect(writer.meta.filename).not.toMatch(/[/\\]/);
+  });
+
   test('emits every source symbol then repairs', async () => {
     const writer = await createQrStreamWriter(noisy(20000), {
       filename: 'big.json',
@@ -84,9 +133,17 @@ describe('createQrStreamWriter', () => {
   });
 
   test('rejects input over the cap', async () => {
-    await expect(
-      createQrStreamWriter(new Uint8Array(MAX_INPUT_BYTES + 1), { filename: 'huge.json', preset: 'fast' }),
-    ).rejects.toBeInstanceOf(RangeError);
+    const pending = createQrStreamWriter(new Uint8Array(MAX_INPUT_BYTES + 1), {
+      filename: 'huge.json',
+      preset: 'fast',
+    });
+    await expect(pending).rejects.toBeInstanceOf(QrStreamError);
+    await expect(pending).rejects.toMatchObject({
+      code: 'INPUT_TOO_LARGE',
+      scope: 'input',
+      limit: MAX_INPUT_BYTES,
+      recovery: 'change-input',
+    });
   });
 
   test('accepts exactly the cap', async () => {

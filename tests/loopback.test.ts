@@ -1,25 +1,33 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { describe, expect, test, beforeAll } from 'vitest';
-import { prepareZXingModule } from 'zxing-wasm/reader';
+import { describe, expect, test, beforeAll, afterAll, vi } from 'vitest';
+import type { FrameDecoder } from '../src/browser/decoder';
 import { createZXingDecoder } from '../src/browser/decoders/zxing';
-import { createQrStreamWriter } from '../src/core/writer';
 import { decodePacket } from '../src/core/packet';
+import { PRESETS, type PresetName } from '../src/core/types';
+import { createQrStreamWriter } from '../src/core/writer';
 import { packetToMatrix } from '../src/qr/matrix';
 import { matrixToRGBA } from '../src/qr/raster';
-import { PRESETS, type PresetName } from '../src/core/types';
 
 const require = createRequire(import.meta.url);
+const wasmUrl = 'https://test.invalid/zxing_reader.wasm';
+
+let decoder: FrameDecoder;
 
 beforeAll(async () => {
+  // `wasmUrl` is required and has no CDN fallback, so serve the packaged wasm
+  // locally instead of fetching. Under Node the Emscripten loader reads the
+  // module through `fetch`, which this stub satisfies.
   const wasmBinary = readFileSync(require.resolve('zxing-wasm/reader/zxing_reader.wasm'));
-  await prepareZXingModule({ overrides: { wasmBinary: new Uint8Array(wasmBinary).buffer } });
+  vi.stubGlobal('fetch', async () => new Response(wasmBinary, { headers: { 'content-type': 'application/wasm' } }));
+  decoder = await createZXingDecoder({ wasmUrl });
+});
+
+afterAll(() => {
+  vi.unstubAllGlobals();
 });
 
 async function decode(image: { data: Uint8ClampedArray; width: number; height: number }) {
-  // Module overrides are cached globally, so the wasmBinary prepared above is
-  // what this decoder instantiates — no URL to fetch under Node.
-  const decoder = await createZXingDecoder();
   const bytes = await decoder.decode(image as unknown as ImageData);
   return bytes === null ? [] : [bytes];
 }
@@ -78,6 +86,6 @@ describe('render / decode loopback', () => {
 
   test('a fractional scale is refused', () => {
     const matrix = { version: 20, size: 97, get: () => false };
-    expect(() => matrixToRGBA(matrix, 2.5)).toThrow(RangeError);
+    expect(() => matrixToRGBA(matrix, 2.5)).toThrow(expect.objectContaining({ code: 'INVALID_SCALE' }));
   });
 });

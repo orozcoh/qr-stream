@@ -1,4 +1,4 @@
-import { symbolIndices } from './prng';
+import { symbolIndices } from './prng.js';
 
 /**
  * Produce the payload for one symbol.
@@ -6,6 +6,8 @@ import { symbolIndices } from './prng';
  * Symbols below `k` are systematic — a copy of the raw block. Symbols from `k`
  * up are repairs: the XOR of the blocks `symbolIndices` selects. Every result
  * is the same length, so repairs can be combined without bookkeeping.
+ *
+ * @internal
  */
 export function encodeSymbol(blocks: Uint8Array[], sessionId: number, symbolIdx: number): Uint8Array {
   const k = blocks.length;
@@ -67,6 +69,8 @@ function xorInto(target: Uint8Array, source: Uint8Array): void {
  * Peeling handles the common case; when it stalls, Gaussian elimination over
  * GF(2) finishes the job. Masks are `bigint` so `k` can reach the 16-bit field
  * limit without a dependency.
+ *
+ * @internal
  */
 export class FountainDecoder {
   readonly sourceCount: number;
@@ -118,7 +122,8 @@ export class FountainDecoder {
     this.peel();
   }
 
-  assemble(): Uint8Array | null {    if (!this.isComplete) return null;
+  assemble(): Uint8Array | null {
+    if (!this.isComplete) return null;
     const out = new Uint8Array(this.sourceCount * this.blockSize);
     for (let i = 0; i < this.sourceCount; i += 1) {
       out.set(this.blocks[i] as Uint8Array, i * this.blockSize);

@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { MAX_INPUT_BYTES, PRESETS, type PresetName } from '../core/types';
-import {
-  estimateTransferSeconds,
-  quantizeFps,
-  renderQrStream,
-  type RenderController,
-} from '../browser/render';
-import { describeAccept, matchesAccept } from './file-accept';
-import { ensureQrStreamStyles } from './styles';
-import { useQrStreamWriter } from './useQrStreamWriter';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { estimateTransferSeconds, quantizeFps, renderQrStream, type RenderController } from '../browser/render.js';
+import { QrStreamError, RenderError } from '../core/errors.js';
+import { MAX_INPUT_BYTES, PRESETS, type PresetName, type TransferLimits } from '../core/types.js';
+import { ErrorText } from './ErrorText.js';
+import { describeAcceptTypes, matchesAccept } from './file-accept.js';
+import { formatQrString, resolveQrStreamStrings, type QrStreamStrings } from './strings.js';
+import { ensureQrStreamStyles } from './styles.js';
+import { useQrStreamWriter } from './useQrStreamWriter.js';
 
 ensureQrStreamStyles();
 
@@ -22,9 +20,24 @@ export interface QrStreamSenderProps {
   accept?: string;
   /** Tighter size limit than the library's, in bytes. */
   maxBytes?: number;
+  /**
+   * Core transfer budgets. The file picker pre-checks against the input budget
+   * and `maxBytes`; the writer's wire-size check remains final.
+   */
+  limits?: TransferLimits;
   /** Called when the stream starts or stops, for embedding apps. */
   onRunningChange?(running: boolean): void;
   className?: string;
+  /** Copy overrides; every visible label is translatable. */
+  strings?: Partial<QrStreamStrings>;
+  /** Host translation for writer errors. Defaults to `error.message`. */
+  formatError?(error: QrStreamError): string;
+}
+
+/** A rejection notice kept as a template so a later translation still applies. */
+interface Notice {
+  readonly kind: 'fileTypeRejected' | 'fileTooLarge';
+  readonly values: Readonly<Record<string, string | number>>;
 }
 
 function formatEstimate(seconds: number): string {
@@ -36,14 +49,18 @@ export function QrStreamSender({
   title = 'qr-stream',
   accept,
   maxBytes,
+  limits,
   onRunningChange,
   className,
+  strings,
+  formatError,
 }: QrStreamSenderProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<RenderController | null>(null);
   const runningRef = useRef(false);
   const onRunningChangeRef = useRef(onRunningChange);
   onRunningChangeRef.current = onRunningChange;
+  const passphraseId = useId();
 
   const [data, setData] = useState<Uint8Array | null>(null);
   const [filename, setFilename] = useState('payload');
@@ -51,7 +68,14 @@ export function QrStreamSender({
   const [passphrase, setPassphrase] = useState('');
   const [fps, setFps] = useState(PRESETS.balanced.fps);
   const [running, setRunning] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [localError, setLocalError] = useState<QrStreamError | null>(null);
+  // The live controller is created once per writer; a frame-rate change is a
+  // controller setting, not a reason to rebuild the stream.
+  const fpsRef = useRef(fps);
+  fpsRef.current = fps;
+
+  const text = resolveQrStreamStrings(strings);
 
   const limit =
     typeof maxBytes === 'number' && Number.isFinite(maxBytes) && maxBytes > 0
@@ -63,6 +87,7 @@ export function QrStreamSender({
     filename,
     preset,
     ...(passphrase ? { passphrase } : {}),
+    ...(limits ? { limits } : {}),
   });
 
   const stop = useCallback(() => {
@@ -76,18 +101,32 @@ export function QrStreamSender({
   const start = useCallback(() => {
     if (!writer || !canvasRef.current) return;
     controllerRef.current?.stop();
+    controllerRef.current = null;
 
-    controllerRef.current = renderQrStream({
-      packets: writer.packets(),
-      canvas: canvasRef.current,
-      fps,
-      version: PRESETS[preset].version,
-    });
-    controllerRef.current.play();
+    let controller: RenderController;
+    try {
+      controller = renderQrStream({
+        writer,
+        canvas: canvasRef.current,
+        fps: fpsRef.current,
+      });
+      controller.play();
+    } catch (cause) {
+      // A failed paint must not leave the UI claiming a stream is running (or
+      // reject an onClick handler the host never awaits).
+      runningRef.current = false;
+      setRunning(false);
+      onRunningChangeRef.current?.(false);
+      setLocalError(new RenderError('The QR display could not start.', { cause, recovery: 'retry' }));
+      return;
+    }
+
+    controllerRef.current = controller;
     runningRef.current = true;
     setRunning(true);
+    setLocalError(null);
     onRunningChangeRef.current?.(true);
-  }, [fps, preset, writer]);
+  }, [writer]);
 
   useEffect(() => stop, [stop]);
 
@@ -117,43 +156,55 @@ export function QrStreamSender({
 
   const pickFile = async (file: File | undefined): Promise<void> => {
     if (!file) return;
+    setLocalError(null);
 
     if (!matchesAccept(file, accept)) {
-      setNotice(`${file.name} is not an accepted file type here.`);
+      setNotice({ kind: 'fileTypeRejected', values: { name: file.name } });
       setData(null);
       return;
     }
     if (file.size > limit) {
-      setNotice(`That file is ${Math.round(file.size / 1024)} KB. The limit is ${Math.round(limit / 1024)} KB.`);
+      setNotice({
+        kind: 'fileTooLarge',
+        values: { kb: Math.round(file.size / 1024), limit: Math.round(limit / 1024) },
+      });
       setData(null);
       return;
     }
 
     setNotice(null);
     setFilename(file.name);
-    setData(new Uint8Array(await file.arrayBuffer()));
+    try {
+      setData(new Uint8Array(await file.arrayBuffer()));
+    } catch (cause) {
+      setData(null);
+      setLocalError(
+        new QrStreamError('COMPRESSION_FAILED', 'The file could not be read.', {
+          cause,
+          recovery: 'retry',
+        }),
+      );
+    }
   };
 
   const estimate = writer ? formatEstimate(estimateTransferSeconds(writer.k, quantizeFps(fps))) : '';
+  const noticeText =
+    notice === null
+      ? null
+      : formatQrString(notice.kind === 'fileTypeRejected' ? text.fileTypeRejected : text.fileTooLarge, notice.values);
 
   return (
     <div className={className ? `qrs ${className}` : 'qrs'}>
       <h2 className="qrs__title">{title}</h2>
 
       <div className="qrs__stage" data-empty={!running}>
-        <canvas ref={canvasRef} className="qrs__canvas" aria-label="QR stream" />
-        {running ? null : (
-          <span className="qrs__placeholder">
-            {writer ? 'Ready — press start' : 'Choose a file to begin'}
-          </span>
-        )}
+        <canvas ref={canvasRef} className="qrs__canvas" role="img" aria-label={text.qrCode} />
+        {running ? null : <span className="qrs__placeholder">{writer ? text.ready : text.chooseFile}</span>}
       </div>
 
       {running ? (
         <label className="qrs__field">
-          <span className="qrs__label">
-            Speed — {fps} fps · {estimate} to receive
-          </span>
+          <span className="qrs__label">{formatQrString(text.speed, { fps, estimate })}</span>
           <input
             className="qrs__range"
             type="range"
@@ -171,68 +222,70 @@ export function QrStreamSender({
         onClick={running ? stop : start}
         disabled={writer === null}
       >
-        {running ? 'Stop stream' : pending ? 'Preparing…' : 'Start stream'}
+        {running ? text.stop : pending ? text.preparing : text.start}
       </button>
 
       {running ? (
-        <p className="qrs__meta">Stop the stream to change the file, density, or passphrase.</p>
+        <p className="qrs__meta">{text.stopToChange}</p>
       ) : (
-      <div className="qrs__settings">
-        <label className="qrs__field">
-          <span className="qrs__label">
-            File {accept ? <span className="qrs__hint">— {describeAccept(accept)}</span> : null}
-          </span>
-          <input
-            className="qrs__input"
-            type="file"
-            {...(accept ? { accept } : {})}
-            onChange={(event) => void pickFile(event.target.files?.[0])}
-          />
-        </label>
+        <div className="qrs__settings">
+          <label className="qrs__field">
+            <span className="qrs__label">
+              {text.file}{' '}
+              {accept ? (
+                <span className="qrs__hint">
+                  {formatQrString(text.accepts, { types: describeAcceptTypes(accept) })}
+                </span>
+              ) : null}
+            </span>
+            <input
+              className="qrs__input"
+              type="file"
+              {...(accept ? { accept } : {})}
+              onChange={(event) => void pickFile(event.target.files?.[0])}
+            />
+          </label>
 
-        <label className="qrs__field">
-          <span className="qrs__label">Density</span>
-          <select
-            className="qrs__select"
-            value={preset}
-            onChange={(event) => {
-              const next = event.target.value as PresetName;
-              setPreset(next);
-              setFps(PRESETS[next].fps);
-            }}
-          >
-            {(Object.keys(PRESETS) as PresetName[]).map((name) => (
-              <option key={name} value={name}>
-                {name} — v{PRESETS[name].version}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="qrs__field">
+            <span className="qrs__label">{text.density}</span>
+            <select
+              className="qrs__select"
+              value={preset}
+              onChange={(event) => {
+                const next = event.target.value as PresetName;
+                setPreset(next);
+                setFps(PRESETS[next].fps);
+              }}
+            >
+              {(Object.keys(PRESETS) as PresetName[]).map((name) => (
+                <option key={name} value={name}>
+                  {formatQrString(text.densityOption, { name, version: PRESETS[name].version })}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="qrs__field">
-          <span className="qrs__label">
-            Passphrase <span className="qrs__hint">— optional</span>
-          </span>
-          <input
-            className="qrs__input"
-            type="password"
-            value={passphrase}
-            autoComplete="off"
-            onChange={(event) => setPassphrase(event.target.value)}
-            placeholder="say it aloud, type it on both devices"
-          />
-        </label>
-      </div>
+          <div className="qrs__field">
+            <label className="qrs__label" htmlFor={passphraseId}>
+              {text.passphrase} <span className="qrs__hint">{text.optional}</span>
+            </label>
+            <input
+              id={passphraseId}
+              className="qrs__input"
+              type="password"
+              value={passphrase}
+              autoComplete="off"
+              onChange={(event) => setPassphrase(event.target.value)}
+              placeholder={text.passphraseHint}
+            />
+          </div>
+        </div>
       )}
 
-      {error ? (
+      <ErrorText error={localError ?? error} {...(formatError ? { formatError } : {})} />
+      {noticeText ? (
         <p className="qrs__error" role="alert">
-          {error.message}
-        </p>
-      ) : null}
-      {notice ? (
-        <p className="qrs__error" role="alert">
-          {notice}
+          {noticeText}
         </p>
       ) : null}
     </div>

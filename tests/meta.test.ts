@@ -47,19 +47,21 @@ describe('metadata block', () => {
 
   test('throws on a truncated buffer', () => {
     const bytes = encodeMeta(base);
-    expect(() => decodeMeta(bytes.subarray(0, bytes.length - 5))).toThrow();
+    expect(() => decodeMeta(bytes.subarray(0, bytes.length - 5))).toThrow(
+      expect.objectContaining({ code: 'INVALID_METADATA' }),
+    );
   });
 
   test('throws on a length field that overruns the buffer', () => {
     const bytes = encodeMeta(base);
     bytes[1] = 200;
-    expect(() => decodeMeta(bytes)).toThrow();
+    expect(() => decodeMeta(bytes)).toThrow(expect.objectContaining({ code: 'INVALID_METADATA' }));
   });
 
   test('rejects an unknown metadata version', () => {
     const bytes = encodeMeta(base);
     bytes[0] = 9;
-    expect(() => decodeMeta(bytes)).toThrow();
+    expect(() => decodeMeta(bytes)).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_VERSION' }));
   });
 
   test('strips bidi controls and path separators from a filename', () => {
@@ -69,13 +71,15 @@ describe('metadata block', () => {
   });
 
   test('rejects a non-canonical varint', () => {
-    expect(() => readVarint(Uint8Array.from([0x80, 0x00]), 0)).toThrow();
+    expect(() => readVarint(Uint8Array.from([0x80, 0x00]), 0)).toThrow(
+      expect.objectContaining({ code: 'INVALID_METADATA' }),
+    );
   });
 
   test('rejects trailing bytes after the metadata block', () => {
     const bytes = encodeMeta(base);
     const extended = new Uint8Array(bytes.length + 1);
     extended.set(bytes);
-    expect(() => decodeMeta(extended)).toThrow();
+    expect(() => decodeMeta(extended)).toThrow(expect.objectContaining({ code: 'INVALID_METADATA' }));
   });
 });
